@@ -1,0 +1,238 @@
+<!--
+Copyright (c) 2020 Philipp Moritz, The dm_control Authors
+
+Use of this source code is governed by an MIT-style
+license that can be found in the LICENSE file or at
+https://opensource.org/licenses/MIT.
+-->
+<mujoco model="joe">
+  <!-- <compiler angle="radian"/> -->
+  <default>
+    <motor ctrlrange="-1.0 1.0" ctrllimited="true" gear="75" />
+    <geom friction="1 0.5 0.5" solref=".02 1" solimp="0 .8 .01" material="self" density="50.0" />
+    <joint limited="true" armature="1" damping="1" stiffness="1" solreflimit=".04 1"
+      solimplimit="0 .8 .03" />
+    <default class="rangefinder">
+      <site type="capsule" size=".05 .5" rgba="1 0 0 .4" group="4" />
+    </default>
+  </default>
+  <asset>
+    <material name="self" rgba=".8 .6 .4 1" />
+    <texture name="grid" type="2d" builtin="checker" width="512" height="512" rgb1=".1 .2 .3"
+      rgb2=".2 .3 .4" />
+    <material name="grid" texture="grid" texrepeat="1 1" texuniform="true" reflectance=".2" />
+  </asset>
+  <worldbody>
+    <!-- <geom name="floor" size="0 0 .05" type="plane" material="grid" condim="3" />
+    <light name="spotlight" mode="targetbodycom" target="torso" diffuse="0.8 .8 .8"
+      specular=".3 .3 .3" pos="0 -6 4" cutoff="30" /> -->
+    <camera name="sideon" pos="0 -10 5" fovy="45" mode="targetbody" target="torso" />
+    <camera name="float_far" pos="-4 0 2" xyaxes="0 -1 0 .5 0 1" mode="trackcom" fovy="90" />
+    <body name="torso" pos="0 0 0.522">
+      <!-- <freejoint name="root" /> -->
+      <camera name="floating" pos="-2 0 1" xyaxes="0 -1 0 .5 0 1" mode="trackcom" fovy="90" />
+
+      <site name="torso_touch" type="capsule" size="0.26" fromto="0 -0.25 0 0 0.25 0" rgba="0 0 1 1"
+        group="4" />
+      <geom name=":w
+      torso_geom" type="capsule" size="0.2" fromto="0 -0.25 0 0 0.25 0"
+        density="100.0" />
+      <site name="torso_site" size="0.05" rgba="1 0 0 1" />
+
+
+      <!-- sites that visualize the x-y axis of the ant body, good for debugging -->
+      <site name="x_pos" type="capsule" pos="0.5 0 0" size=".05 .5" zaxis="1 0 0" rgba="1 0 0 1"
+        group="5" />
+      <site name="x_neg" type="capsule" pos="-0.5 0 0" size=".05 .5" zaxis="-1 0 0" rgba="0 0 1 1"
+        group="5" />
+      <site name="y_pos" type="capsule" pos="0 0.5 0" size=".05 .5" zaxis="0 1 0" rgba="1 1 1 1"
+        group="5" />
+      <site name="y_neg" type="capsule" pos="0 -0.5 0" size=".05 .5" zaxis="0 -1 0" rgba="0 0 0 1"
+        group="5" />
+      <site name="port_site" pos=".5 0 0" size="0.5" rgba="1 0 0 1" group="5" />
+      <site name="starboard_site" pos="-.5 0 0" size="0.5" rgba="0 1 0 1" group="5" />
+
+
+      <body name="neck" pos="0 0.2 0.2" euler="45 0 0">
+        <geom name="neck_geom" type="capsule" size="0.04" fromto="0 0 0 0 0.20 0" />
+        <body name="head" pos="0 0.20 0" euler="-45 0 0">
+          <joint name="neck_x" axis="1 0 0" range="-60 60" />
+          <joint name="neck_y" axis="0 1 0" range="-60 60 " />
+          <joint name="neck_z" axis="0 0 1" range="-60 60" />
+          <camera name="egocentric" pos="0 .3 0" xyaxes="1 0 0 0 0 1" fovy="90" />
+          <geom name="head_geom" type="capsule" size="0.08" fromto="0 0 0 0 0.20 0" />
+          <body name="rangefinder" pos="0 0 -0.1" euler="0 0 90">
+            <site name="rf_00" class="rangefinder" fromto=".41 -.02  .11 .34 0 .115" />
+            <site name="rf_01" class="rangefinder" fromto=".41 -.01  .11 .34 0 .115" />
+            <site name="rf_02" class="rangefinder" fromto=".41   0   .11 .34 0 .115" />
+            <site name="rf_03" class="rangefinder" fromto=".41  .01  .11 .34 0 .115" />
+            <site name="rf_04" class="rangefinder" fromto=".41  .02  .11 .34 0 .115" />
+            <site name="rf_10" class="rangefinder" fromto=".41 -.02  .1  .36 0 .11" />
+            <site name="rf_11" class="rangefinder" fromto=".41 -.02  .1  .36 0 .11" />
+            <site name="rf_12" class="rangefinder" fromto=".41   0   .1  .36 0 .11" />
+            <site name="rf_13" class="rangefinder" fromto=".41  .01  .1  .36 0 .11" />
+            <site name="rf_14" class="rangefinder" fromto=".41  .02  .1  .36 0 .11" />
+            <site name="rf_20" class="rangefinder" fromto=".41 -.02  .09 .38 0 .105" />
+            <site name="rf_21" class="rangefinder" fromto=".41 -.01  .09 .38 0 .105" />
+            <site name="rf_22" class="rangefinder" fromto=".41   0   .09 .38 0 .105" />
+            <site name="rf_23" class="rangefinder" fromto=".41  .01  .09 .38 0 .105" />
+            <site name="rf_24" class="rangefinder" fromto=".41  .02  .09 .38 0 .105" />
+            <site name="rf_30" class="rangefinder" fromto=".41 -.02  .08 .4  0 .1" />
+            <site name="rf_31" class="rangefinder" fromto=".41 -.01  .08 .4  0 .1" />
+            <site name="rf_32" class="rangefinder" fromto=".41   0   .08 .4  0 .1" />
+            <site name="rf_33" class="rangefinder" fromto=".41  .01  .08 .4  0 .1" />
+            <site name="rf_34" class="rangefinder" fromto=".41  .02  .08 .4  0 .1" />
+          </body>
+        </body>
+      </body>
+      <body name="front_left_leg" pos="0.2 0.2 0">
+        <joint name="front_left_hip_x" axis="1 0 0" range="-60 60" />
+        <joint name="front_left_hip_y" axis="0 1 0" range="-60 60" />
+        <joint name="front_left_hip_z" axis="0 0 1" range="-60 60" />
+        <geom name="front_left_leg_geom" type="capsule" size="0.04" fromto="0.0 0.0 0.0 0.3 0.0 0.0" />
+        <site name="front_left_leg_touch" type="capsule" size="0.05" fromto="0 0 0 0.3 0 0"
+          rgba="1 1 0 0" />
+        <body name="front_left_foot" pos="0.3 0 0">
+          <joint name="front_left_ankle" type="hinge" pos="0.0 0.0 0.0" axis="0 1 0" range="-60 60" />
+          <geom name="front_left_ankle_geom" type="capsule" size="0.04"
+            fromto="0.0 0.0 0.0 0 0 -0.3" />
+          <site name="front_left_ankle_touch" type="capsule" size="0.05" fromto="0 0 0 0 0 -0.3"
+            rgba="1 1 0 0" />
+        </body>
+      </body>
+      <body name="front_right_leg" pos="-0.2 0.2 0">
+        <joint name="front_right_hip_x" axis="1 0 0" range="-60 60" />
+        <joint name="front_right_hip_y" axis="0 1 0" range="-60 60" />
+        <joint name="front_right_hip_z" axis="0 0 1" range="-60 60" />
+        <geom name="front_right_leg_geom" type="capsule" size="0.04"
+          fromto="0.0 0.0 0.0 -0.3 0.0 0.0" />
+        <site name="front_right_leg_touch" type="capsule" size="0.05" fromto="0 0 0 -0.3 0 0"
+          rgba="1 1 0 0" />
+        <body name="front_right_foot" pos="-0.3 0 0">
+          <joint name="front_right_ankle" type="hinge" pos="0.0 0.0 0.0" axis="0 1 0" range="-60 60" />
+          <geom name="front_right_ankle_geom" type="capsule" size="0.04"
+            fromto="0.0 0.0 0.0 0 0 -0.3" />
+          <site name="front_right_ankle_touch" type="capsule" size="0.05"
+            fromto="0.0 0.0 0.0 0.0 0.0 -0.3" rgba="1 1 0 0" />
+        </body>
+      </body>
+
+      <body name="back_left_leg" pos="0.2 -0.2 0">
+        <joint name="back_left_hip_x" axis="1 0 0" range="-60 60" />
+        <joint name="back_left_hip_y" axis="0 1 0" range="-60 60" />
+        <joint name="back_left_hip_z" axis="0 0 1" range="-60 60" />
+        <geom name="back_left_leg_geom" type="capsule" size="0.04" fromto="0.0 0.0 0.0 0.3 0.0 0.0" />
+        <site name="back_left_leg_touch" type="capsule" size="0.05" fromto="0 0 0 0.3 0 0"
+          rgba="1 1 0 0" />
+        <body name="back_left_foot" pos="0.3 0 0">
+          <joint name="back_left_ankle" type="hinge" pos="0.0 0.0 0.0" axis="0 1 0" range="-60 60" />
+          <geom name="back_left_ankle_geom" type="capsule" size="0.04" fromto="0.0 0.0 0.0 0 0 -0.3" />
+          <site name="back_left_ankle_touch" type="capsule" size="0.05" fromto="0 0 0 0 0 -0.3"
+            rgba="1 1 0 0" />
+        </body>
+      </body>
+
+      <body name="back_right_leg" pos="-0.2 -0.2 0">
+        <joint name="back_right_hip_x" axis="1 0 0" range="-60 60" />
+        <joint name="back_right_hip_y" axis="0 1 0" range="-60 60" />
+        <joint name="back_right_hip_z" axis="0 0 1" range="-60 60" />
+        <geom name="back_right_leg_geom" type="capsule" size="0.04"
+          fromto="0.0 0.0 0.0 -0.3 0.0 0.0" />
+        <site name="back_right_leg_touch" type="capsule" size="0.05" fromto="0 0 0 -0.3 0 0"
+          rgba="1 1 0 0" />
+        <body name="back_right_foot" pos="-0.3 0 0">
+          <joint name="back_right_ankle" type="hinge" pos="0.0 0.0 0.0" axis="0 1 0" range="-60 60" />
+          <geom name="back_right_ankle_geom" type="capsule" size="0.04"
+            fromto="0.0 0.0 0.0 0 0 -0.3" />
+          <site name="back_right_ankle_touch" type="capsule" size="0.05"
+            fromto="0.0 0.0 0.0 0.0 0.0 -0.3" rgba="1 1 0 0" />
+        </body>
+      </body>
+
+
+    </body>
+  </worldbody>
+
+  <actuator>
+    <motor name="front_left_hip_x" joint="front_left_hip_x" />
+    <motor name="front_left_hip_y" joint="front_left_hip_y" />
+    <motor name="front_left_hip_z" joint="front_left_hip_z" />
+    <motor name="front_left_ankle" joint="front_left_ankle" />
+    <motor name="front_right_hip_x" joint="front_right_hip_x" />
+    <motor name="front_right_hip_y" joint="front_right_hip_y" />
+    <motor name="front_right_hip_z" joint="front_right_hip_z" />
+    <motor name="front_right_ankle" joint="front_right_ankle" />
+    <motor name="back_left_hip_x" joint="back_left_hip_x" />
+    <motor name="back_left_hip_y" joint="back_left_hip_y" />
+    <motor name="back_left_hip_z" joint="back_left_hip_z" />
+    <motor name="back_left_ankle" joint="back_left_ankle" />
+    <motor name="back_right_hip_x" joint="back_right_hip_x" />
+    <motor name="back_right_hip_y" joint="back_right_hip_y" />
+    <motor name="back_right_hip_z" joint="back_right_hip_z" />
+    <motor name="back_right_ankle" joint="back_right_ankle" />
+    <motor name="neck_x" joint="neck_x" />
+    <motor name="neck_y" joint="neck_y" />
+    <motor name="neck_z" joint="neck_z" />
+  </actuator>
+
+  <sensor>
+    <touch name="torso_touch" site="torso_touch" />
+    <touch name="front_left_leg_touch" site="front_left_leg_touch" />
+    <touch name="front_left_ankle_touch" site="front_left_ankle_touch" />
+    <touch name="front_right_leg_touch" site="front_right_leg_touch" />
+    <touch name="front_right_ankle_touch" site="front_right_ankle_touch" />
+    <touch name="back_left_leg_touch" site="back_left_leg_touch" />
+    <touch name="back_left_ankle_touch" site="back_left_ankle_touch" />
+    <touch name="back_right_leg_touch" site="back_right_leg_touch" />
+    <touch name="back_right_ankle_touch" site="back_right_ankle_touch" />
+
+    <torque name="front_left_leg_torque" site="front_left_leg_touch" />
+    <torque name="front_left_ankle_torque" site="front_left_ankle_touch" />
+    <torque name="front_right_leg_torque" site="front_right_leg_touch" />
+    <torque name="front_right_ankle_torque" site="front_right_ankle_touch" />
+    <torque name="back_left_leg_torque" site="back_left_leg_touch" />
+    <torque name="back_left_ankle_torque" site="back_left_ankle_touch" />
+    <torque name="back_right_leg_torque" site="back_right_leg_touch" />
+    <torque name="back_right_ankle_torque" site="back_right_ankle_touch" />
+    <force name="front_left_leg_force" site="front_left_leg_touch" />
+    <force name="front_left_ankle_force" site="front_left_ankle_touch" />
+    <force name="front_right_leg_force" site="front_right_leg_touch" />
+    <force name="front_right_ankle_force" site="front_right_ankle_touch" />
+    <force name="back_left_leg_force" site="back_left_leg_touch" />
+    <force name="back_left_ankle_force" site="back_left_ankle_touch" />
+    <force name="back_right_leg_force" site="back_right_leg_touch" />
+    <force name="back_right_ankle_force" site="back_right_ankle_touch" />
+    <velocimeter name="torso_vel" site="torso_site" />
+    <gyro name="torso_gyro" site="torso_site" />
+    <accelerometer name="torso_accel" site="torso_site" />
+    <rangefinder name="rf_00" site="rf_00" />
+    <rangefinder name="rf_01" site="rf_01" />
+    <rangefinder name="rf_02" site="rf_02" />
+    <rangefinder name="rf_03" site="rf_03" />
+    <rangefinder name="rf_04" site="rf_04" />
+    <rangefinder name="rf_10" site="rf_10" />
+    <rangefinder name="rf_11" site="rf_11" />
+    <rangefinder name="rf_12" site="rf_12" />
+    <rangefinder name="rf_13" site="rf_13" />
+    <rangefinder name="rf_14" site="rf_14" />
+    <rangefinder name="rf_20" site="rf_20" />
+    <rangefinder name="rf_21" site="rf_21" />
+    <rangefinder name="rf_22" site="rf_22" />
+    <rangefinder name="rf_23" site="rf_23" />
+    <rangefinder name="rf_24" site="rf_24" />
+    <rangefinder name="rf_30" site="rf_30" />
+    <rangefinder name="rf_31" site="rf_31" />
+    <rangefinder name="rf_32" site="rf_32" />
+    <rangefinder name="rf_33" site="rf_33" />
+    <rangefinder name="rf_34" site="rf_34" />
+
+  </sensor>
+
+  <contact>
+    <exclude body1="torso" body2="front_left_leg" />
+    <exclude body1="torso" body2="front_right_leg" />
+    <exclude body1="torso" body2="back_left_leg" />
+    <exclude body1="torso" body2="back_right_leg" />
+    <exclude body1="neck" body2="head" />
+  </contact>
+</mujoco>
