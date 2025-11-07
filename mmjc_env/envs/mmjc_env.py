@@ -30,6 +30,7 @@ class MMJCENV(gym.Env):
         optional_reward=False,
         seed=42,
         model_name="mmjc_model",
+        targets_per_room=1,
     ):
         # self.maze_size = maze_size  # The size of the maze (maze_size x maze_size)
         self.window_size = 512  # The size of the PyGame window
@@ -48,7 +49,7 @@ class MMJCENV(gym.Env):
             3,
             room_min_size=3,
             room_max_size=5,
-            global_observables=False,
+            global_observables=self.optional_reward,
             image_only_obs=False,
             top_camera=top_camera,
             camera_resolution=self.camera_resolution,
@@ -57,7 +58,7 @@ class MMJCENV(gym.Env):
             target_color_in_image=False,
             walker_str="ant",
             remap_obs=True,
-            targets_per_room=1,
+            targets_per_room=targets_per_room,
         )
 
         action_space = _convert_to_space(self.mm_env.action_spec())
@@ -71,6 +72,9 @@ class MMJCENV(gym.Env):
                 "top_camera",
                 "walker/egocentric_camera",
                 "target_color",
+                "target_pos",
+                "target_vec",
+                "agent_dir",
             ]:  # Exclude these keys
                 total_sensor_dim += np.prod(value.shape)
 
@@ -119,6 +123,8 @@ class MMJCENV(gym.Env):
             elif key == "target_color":
                 observation["target_color"] = value
                 self._target_color = value
+            elif key in ["target_pos", "target_vec", "agent_dir"]:
+                new_info[key] = value
             elif np.prod(value.shape) != 0:
                 sensors.append(value.flatten())
 

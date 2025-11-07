@@ -18,4 +18,8 @@ register(
 register(
     id="mmjc-easy",
     entry_point="mmjc_env.envs:MMJCENV",
+    kwargs={
+        "optional_reward": True,
+        "targets_per_room": 10,
+    },
 )
