@@ -20,7 +20,7 @@ TARGET_COLORS = np.array(
 
 
 class MMJCENV(gym.Env):
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 40}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 1000}
 
     def __init__(
         self,
@@ -240,7 +240,7 @@ class MMJCENV(gym.Env):
             self.window = pygame.display.set_mode(
                 (self.window_size * 2, self.window_size)
             )
-            pygame.display.set_caption("Memory Maze Environment")
+            pygame.display.set_caption(self.model_name)
         if self.clock is None and self.render_mode == "human":
             self.clock = pygame.time.Clock()
 
