@@ -39,6 +39,7 @@ class MMJCENV(gym.Env):
         self.top_camera = top_camera
         self.optional_reward = optional_reward
         self.seed = seed
+        self.time_limit = time_limit
 
         if render_mode == "human":
             self.camera_resolution = 256
@@ -138,6 +139,7 @@ class MMJCENV(gym.Env):
         # We need the following line to seed self.np_random
         super().reset(seed=seed)
         self._total_reward = 0.0
+        self._time_step = 0
 
         time_step = self.mm_env.reset()
         observation, info = self._get_obs_and_info(
@@ -204,7 +206,7 @@ class MMJCENV(gym.Env):
         return angle
 
     def step(self, action):
-
+        self._time_step += 1
         time_step = self.mm_env.step(action)
         observation, info = self._get_obs_and_info(time_step.observation)
         reward = time_step.reward
@@ -291,10 +293,17 @@ class MMJCENV(gym.Env):
 
             # Display total reward next to the target color
             reward_text = font.render(
-                f"Reward: {self._total_reward:.7f}", True, (0, 0, 0)
+                f"Reward: {self._total_reward:.2f}", True, (0, 0, 0)
             )
             reward_rect = reward_text.get_rect(topleft=(text_rect.right + 44, 10))
             self.window.blit(reward_text, reward_rect)
+
+            # Display time step next to the reward_text
+            time_text = font.render(
+                f"Timestep: {self._time_step//40}/{self.time_limit}", True, (0, 0, 0)
+            )
+            time_rect = time_text.get_rect(topleft=(reward_rect.right + 44, 10))
+            self.window.blit(time_text, time_rect)
 
             # Update the display
             pygame.event.pump()
