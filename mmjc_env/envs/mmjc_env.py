@@ -31,6 +31,8 @@ class MMJCENV(gym.Env):
         seed=42,
         model_name="mmjc_model",
         targets_per_room=1,
+        time_limit=250,
+        num_targets=3,
     ):
         # self.maze_size = maze_size  # The size of the maze (maze_size x maze_size)
         self.window_size = 512  # The size of the PyGame window
@@ -46,7 +48,8 @@ class MMJCENV(gym.Env):
 
         self.mm_env = tasks._memory_maze(
             maze_size,
-            3,
+            num_targets,
+            time_limit=time_limit,
             room_min_size=3,
             room_max_size=5,
             global_observables=self.optional_reward,
@@ -298,7 +301,7 @@ class MMJCENV(gym.Env):
             pygame.display.flip()  # Use flip to update the entire screen
 
             # Tick the clock to maintain FPS
-            self.clock.tick(self.metadata["render_fps"])
+            # self.clock.tick(self.metadata["render_fps"])
 
         elif self.render_mode == "rgb_array":  # rgb_array
             return np.concatenate(

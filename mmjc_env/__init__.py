@@ -16,6 +16,16 @@ register(
 )
 
 register(
+    id="MMJC-13x13-v0",
+    entry_point="mmjc_env.envs:MMJCENV",
+    kwargs={
+        "maze_size": 13,
+        "num_targets": 5,
+        "time_limit": 750,
+    },
+)
+
+register(
     id="mmjc-easy",
     entry_point="mmjc_env.envs:MMJCENV",
     kwargs={
