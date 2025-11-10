@@ -209,11 +209,13 @@ class MMJCENV(gym.Env):
         self._time_step += 1
         time_step = self.mm_env.step(action)
         observation, info = self._get_obs_and_info(time_step.observation)
-        reward = time_step.reward
+        reward = time_step.reward or 0.0
+        
         terminated = False
         truncated = False
 
         optional_reward = self.calculate_optional_reward(time_step)
+
         reward += optional_reward
 
         if time_step.last():
