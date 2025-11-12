@@ -372,16 +372,9 @@ class MMJCENV(gym.Env):
         else:
             normalized = np.zeros_like(self.exploration_history, dtype=np.uint8)
 
-        # Create RGB image: blue for low visits, red for high visits
+        # Create RGB image: white background, gray density (darker = more visited)
         height, width = normalized.shape
-        rgb_image = np.zeros((height, width, 3), dtype=np.uint8)
-
-        # Blue channel: inverse of visits (more blue = less visited)
-        rgb_image[:, :, 2] = 255 - normalized  # Blue
-        # Red channel: proportional to visits (more red = more visited)
-        rgb_image[:, :, 0] = normalized  # Red
-        # Green channel: medium values for contrast
-        rgb_image[:, :, 1] = (normalized // 2).astype(np.uint8)  # Green
+        rgb_image = np.full((height, width, 3), 255, dtype=np.uint8) - normalized[:, :, np.newaxis]
 
         # Resize to match camera resolution
         rgb_image = cv2.resize(
