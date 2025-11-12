@@ -333,9 +333,9 @@ class MMJCENV(gym.Env):
                 f"Coverage: {(self.exploration_history > 0).sum() / self.exploration_history.size * 100:.1f}%",
                 True,
                 (
-                    255,
-                    255,
-                    255,
+                    0,
+                    0,
+                    0,
                 ),  # White text for better visibility on colored background
             )
             # Position over the third panel (exploration map)
