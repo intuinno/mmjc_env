@@ -141,6 +141,9 @@ class MMJCENV(gym.Env):
                 sensors.append(value.flatten())
 
         observation["sensors"] = np.concatenate(sensors)
+        new_info["coverage"] = (
+            (self.exploration_history > 0).sum() / self.exploration_history.size * 100
+        )
         return observation, new_info
 
     def reset(self, seed=None, options=None):
@@ -324,6 +327,21 @@ class MMJCENV(gym.Env):
             )
             time_rect = time_text.get_rect(topleft=(reward_rect.right + 44, 10))
             self.window.blit(time_text, time_rect)
+
+            # Display coverage over the exploration map (third panel)
+            coverage_text = font.render(
+                f"Coverage: {(self.exploration_history > 0).sum() / self.exploration_history.size * 100:.1f}%",
+                True,
+                (
+                    255,
+                    255,
+                    255,
+                ),  # White text for better visibility on colored background
+            )
+            # Position over the third panel (exploration map)
+            coverage_x = 2 * self.window_size + 10
+            coverage_rect = coverage_text.get_rect(topleft=(coverage_x, 10))
+            self.window.blit(coverage_text, coverage_rect)
 
             # Update the display
             pygame.event.pump()
