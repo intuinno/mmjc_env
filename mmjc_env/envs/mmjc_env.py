@@ -374,7 +374,10 @@ class MMJCENV(gym.Env):
 
         # Create RGB image: white background, gray density (darker = more visited)
         height, width = normalized.shape
-        rgb_image = np.full((height, width, 3), 255, dtype=np.uint8) - normalized[:, :, np.newaxis]
+        rgb_image = (
+            np.full((height, width, 3), 255, dtype=np.uint8)
+            - normalized[:, :, np.newaxis]
+        )
 
         # Resize to match camera resolution
         rgb_image = cv2.resize(
