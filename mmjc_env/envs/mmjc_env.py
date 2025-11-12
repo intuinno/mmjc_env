@@ -34,6 +34,7 @@ class MMJCENV(gym.Env):
         time_limit=250,
         num_targets=3,
         exploration_reward=False,
+        target_reward=True,
     ):
         # self.maze_size = maze_size  # The size of the maze (maze_size x maze_size)
         self.window_size = 512  # The size of the PyGame window
@@ -42,6 +43,7 @@ class MMJCENV(gym.Env):
         self.seed = seed
         self.time_limit = time_limit
         self.exploration_reward = exploration_reward
+        self.target_reward = target_reward
 
         if render_mode == "human":
             self.camera_resolution = 256
@@ -231,12 +233,16 @@ class MMJCENV(gym.Env):
         self._time_step += 1
         time_step = self.mm_env.step(action)
         observation, info = self._get_obs_and_info(time_step.observation)
-        reward = time_step.reward or 0.0
 
         terminated = False
         truncated = False
 
         optional_reward = self.calculate_optional_reward(time_step)
+
+        if self.target_reward:
+            reward = time_step.reward or 0.0
+        else:
+            reward = 0.0
 
         reward += optional_reward
 

@@ -45,3 +45,16 @@ register(
         "optional_reward": True,
     },
 )
+
+register(
+    id="mmjc-explore-only",
+    entry_point="mmjc_env.envs:MMJCENV",
+    kwargs={
+        "maze_size": 15,
+        "num_targets": 5,
+        "time_limit": 750,
+        "exploration_reward": True,
+        "optional_reward": False,
+        "target_reward": False,
+    },
+)
