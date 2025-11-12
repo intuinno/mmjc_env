@@ -169,7 +169,7 @@ def _memory_maze(
             obs_mapping = dict(
                 obs_mapping,
                 **{
-                    # "agent_pos": "agent_pos",
+                    "agent_pos": "agent_pos",
                     "agent_dir": "agent_dir",
                     # "targets_vec": "targets_vec",
                     # "targets_pos": "targets_pos",

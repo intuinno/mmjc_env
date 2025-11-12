@@ -1,7 +1,7 @@
 import gymnasium
 import mmjc_env
 
-env = gymnasium.make("mmjc-easy", render_mode="human")
+env = gymnasium.make("mmjc-explore", render_mode="human", exploration_reward=True)
 
 obs, info = env.reset()
 done = False

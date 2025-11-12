@@ -33,6 +33,7 @@ class MMJCENV(gym.Env):
         targets_per_room=1,
         time_limit=250,
         num_targets=3,
+        exploration_reward=False,
     ):
         # self.maze_size = maze_size  # The size of the maze (maze_size x maze_size)
         self.window_size = 512  # The size of the PyGame window
@@ -40,12 +41,15 @@ class MMJCENV(gym.Env):
         self.optional_reward = optional_reward
         self.seed = seed
         self.time_limit = time_limit
+        self.exploration_reward = exploration_reward
 
         if render_mode == "human":
             self.camera_resolution = 256
             # self.camera_resolution = 64
         else:
-            self.camera_resolution = 256
+            self.camera_resolution = 64
+
+        global_observables = self.optional_reward or self.exploration_reward
 
         self.mm_env = tasks._memory_maze(
             maze_size,
@@ -53,7 +57,7 @@ class MMJCENV(gym.Env):
             time_limit=time_limit,
             room_min_size=3,
             room_max_size=5,
-            global_observables=self.optional_reward,
+            global_observables=global_observables,
             image_only_obs=False,
             top_camera=top_camera,
             camera_resolution=self.camera_resolution,
@@ -64,6 +68,9 @@ class MMJCENV(gym.Env):
             remap_obs=True,
             targets_per_room=targets_per_room,
         )
+
+        # Initialize exploration history as 2D integer array
+        self.exploration_history = np.zeros((maze_size, maze_size), dtype=int)
 
         action_space = _convert_to_space(self.mm_env.action_spec())
         original_obs_space = _convert_to_space(self.mm_env.observation_spec())
@@ -79,6 +86,7 @@ class MMJCENV(gym.Env):
                 "target_pos",
                 "target_vec",
                 "agent_dir",
+                "agent_pos",
             ]:  # Exclude these keys
                 total_sensor_dim += np.prod(value.shape)
 
@@ -127,7 +135,7 @@ class MMJCENV(gym.Env):
             elif key == "target_color":
                 observation["target_color"] = value
                 self._target_color = value
-            elif key in ["target_pos", "target_vec", "agent_dir"]:
+            elif key in ["target_pos", "target_vec", "agent_dir", "agent_pos"]:
                 new_info[key] = value
             elif np.prod(value.shape) != 0:
                 sensors.append(value.flatten())
@@ -140,6 +148,8 @@ class MMJCENV(gym.Env):
         super().reset(seed=seed)
         self._total_reward = 0.0
         self._time_step = 0
+        # Reset exploration history
+        self.exploration_history.fill(0)
 
         time_step = self.mm_env.reset()
         observation, info = self._get_obs_and_info(
@@ -152,6 +162,8 @@ class MMJCENV(gym.Env):
         return observation, info
 
     def calculate_optional_reward(self, time_step):
+        optional_reward = 0
+        exploration_reward = 0
         if self.optional_reward:
             observation = time_step.observation
 
@@ -170,9 +182,16 @@ class MMJCENV(gym.Env):
 
             # Scale the reward to be small compared to the main task reward
             reward_scale = 0.00001
-            return reward_scale * alignment_reward
+            optional_reward = reward_scale * alignment_reward
+        if self.exploration_reward:
+            agent_pos = time_step.observation["agent_pos"]
+            x, y = int(agent_pos[0]), int(agent_pos[1])
+            if self.exploration_history[x, y] == 0:
+                exploration_reward = 0.02
+            self.exploration_history[x, y] += 1
 
-        return 0
+        total_reward = optional_reward + exploration_reward
+        return total_reward
 
     def calculate_angle_from_obs(self, observation):
         """
@@ -210,7 +229,7 @@ class MMJCENV(gym.Env):
         time_step = self.mm_env.step(action)
         observation, info = self._get_obs_and_info(time_step.observation)
         reward = time_step.reward or 0.0
-        
+
         terminated = False
         truncated = False
 
@@ -244,29 +263,28 @@ class MMJCENV(gym.Env):
         if self.window is None and self.render_mode == "human":
             pygame.init()
             pygame.display.init()
+            # Update window size to accommodate three images
             self.window = pygame.display.set_mode(
-                (self.window_size * 2, self.window_size)
+                (self.window_size * 3, self.window_size)
             )
             pygame.display.set_caption(self.model_name)
         if self.clock is None and self.render_mode == "human":
             self.clock = pygame.time.Clock()
 
-        canvas = pygame.Surface((self.window_size * 2, self.window_size))
-        canvas.fill((255, 255, 255))
-        pygame.display.flip()
-
-        # self._ego_centric_camera has shape (64, 64, 3)
-        # We will render the frame
-
         if self.render_mode == "human":
-            # First horizontally stack the ego-centric camera views and top down views
-            # to build a single image at time t
+            # Create exploration map visualization
+            exploration_map = self._create_exploration_map()
+
+            # First horizontally stack the ego-centric camera views, top down views, and exploration map
             if self.top_camera:
                 combined_image = np.concatenate(
-                    [self._ego_centric_camera, self._top_camera], axis=1
+                    [self._ego_centric_camera, self._top_camera, exploration_map],
+                    axis=1,
                 )
             else:
-                combined_image = self._ego_centric_camera
+                combined_image = np.concatenate(
+                    [self._ego_centric_camera, exploration_map, exploration_map], axis=1
+                )
             combined_surface = pygame.surfarray.make_surface(
                 combined_image.transpose(1, 0, 2)
             )
@@ -315,9 +333,49 @@ class MMJCENV(gym.Env):
             # self.clock.tick(self.metadata["render_fps"])
 
         elif self.render_mode == "rgb_array":  # rgb_array
-            return np.concatenate(
-                [self._ego_centric_camera, self._top_camera], axis=1
-            )  # shape (128, 64, 3)
+            exploration_map = self._create_exploration_map()
+            if self.top_camera:
+                return np.concatenate(
+                    [self._ego_centric_camera, self._top_camera, exploration_map],
+                    axis=1,
+                )  # shape (192, 64, 3)
+            else:
+                return np.concatenate(
+                    [self._ego_centric_camera, exploration_map, exploration_map], axis=1
+                )  # shape (192, 64, 3)
+
+    def _create_exploration_map(self):
+        """Create a visualization of the exploration history as an RGB image."""
+        # Normalize the exploration history to 0-255 range
+        if self.exploration_history.max() > 0:
+            normalized = (
+                self.exploration_history / self.exploration_history.max() * 255
+            ).astype(np.uint8)
+        else:
+            normalized = np.zeros_like(self.exploration_history, dtype=np.uint8)
+
+        # Create RGB image: blue for low visits, red for high visits
+        height, width = normalized.shape
+        rgb_image = np.zeros((height, width, 3), dtype=np.uint8)
+
+        # Blue channel: inverse of visits (more blue = less visited)
+        rgb_image[:, :, 2] = 255 - normalized  # Blue
+        # Red channel: proportional to visits (more red = more visited)
+        rgb_image[:, :, 0] = normalized  # Red
+        # Green channel: medium values for contrast
+        rgb_image[:, :, 1] = (normalized // 2).astype(np.uint8)  # Green
+
+        # Resize to match camera resolution
+        rgb_image = cv2.resize(
+            rgb_image,
+            (self.camera_resolution, self.camera_resolution),
+            interpolation=cv2.INTER_NEAREST,
+        )
+
+        # Rotate 90 degrees counter-clockwise to match camera orientation
+        rgb_image = cv2.rotate(rgb_image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+        return rgb_image
 
     def close(self):
         if self.window is not None:

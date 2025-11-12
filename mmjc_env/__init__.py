@@ -33,3 +33,15 @@ register(
         "targets_per_room": 10,
     },
 )
+
+register(
+    id="mmjc-explore",
+    entry_point="mmjc_env.envs:MMJCENV",
+    kwargs={
+        "maze_size": 13,
+        "num_targets": 5,
+        "time_limit": 750,
+        "exploration_reward": True,
+        "optional_reward": True,
+    },
+)
