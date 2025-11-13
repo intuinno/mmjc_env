@@ -370,20 +370,29 @@ class MMJCENV(gym.Env):
 
     def _create_exploration_map(self):
         """Create a visualization of the exploration history as an RGB image."""
-        # Normalize the exploration history to 0-255 range
-        if self.exploration_history.max() > 0:
-            normalized = (
-                self.exploration_history / self.exploration_history.max() * 255
-            ).astype(np.uint8)
-        else:
-            normalized = np.zeros_like(self.exploration_history, dtype=np.uint8)
+        height, width = self.exploration_history.shape
+        rgb_image = np.full((height, width, 3), 255, dtype=np.uint8)  # Start with white
 
-        # Create RGB image: white background, gray density (darker = more visited)
-        height, width = normalized.shape
-        rgb_image = (
-            np.full((height, width, 3), 255, dtype=np.uint8)
-            - normalized[:, :, np.newaxis]
-        )
+        # Find visited cells
+        visited_mask = self.exploration_history > 0
+        if visited_mask.any():
+            visited_counts = self.exploration_history[visited_mask]
+
+            # Create 5 segments based on percentiles of visit counts
+            percentiles = np.percentile(visited_counts, np.linspace(0, 100, 6))
+            # percentiles will be [min, 20th, 40th, 60th, 80th, 100th percentile]
+
+            # Assign each visited count to a segment (0-4)
+            segments = np.digitize(
+                visited_counts, percentiles[1:-1]
+            )  # bins are percentiles[1] to percentiles[4]
+
+            # Map segments to gray values: 0 (lightest) to 4 (darkest)
+            # Lightest gray: 200, darkest: 0, in 5 steps
+            gray_values = np.linspace(200, 0, 5, dtype=np.uint8)
+
+            # Apply gray values to visited cells
+            rgb_image[visited_mask] = gray_values[segments][:, np.newaxis]
 
         # Resize to match camera resolution
         rgb_image = cv2.resize(
