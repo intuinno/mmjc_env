@@ -84,11 +84,13 @@ def _memory_maze(
         walker = Joe()
     else:
         raise NotImplementedError
+    skybox_texure = labmaze_textures.SkyBox(style='sky_03')
     arena = MazeWithTargetsArena(
         x_cells=maze_size + 2,  # inner size => outer size
         y_cells=maze_size + 2,
         xy_scale=2.0,
-        z_height=1.5 if not good_visibility else 0.4,
+        # z_height=1.5 if not good_visibility else 0.4,
+        z_height=1.0,
         max_rooms=max_rooms,
         room_min_size=room_min_size,
         room_max_size=room_max_size,
@@ -103,7 +105,7 @@ def _memory_maze(
                 str(i): labmaze_textures.WallTextures("style_01") for i in range(10)
             }  # variations
         ),
-        skybox_texture=None,
+        skybox_texture=skybox_texure,
         random_seed=random_state.randint(2147483648),
     )
 
