@@ -18,6 +18,18 @@ TARGET_COLORS = np.array(
     ]
 )
 
+# RGB colors extracted from labmaze style_01 wall textures
+STYLE_01_TEXTURE_COLORS = {
+    "blue": (32, 119, 182),
+    "cerise": (174, 67, 106),
+    "green": (88, 125, 78),
+    "green_bright": (169, 200, 159),
+    "purple": (71, 83, 181),
+    "red": (147, 33, 26),
+    "red_bright": (218, 126, 105),
+    "yellow": (202, 174, 39),
+}
+
 
 class MMJCENV(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 1000}
@@ -73,6 +85,8 @@ class MMJCENV(gym.Env):
 
         # Initialize exploration history as 2D integer array
         self.exploration_history = np.zeros((maze_size, maze_size), dtype=int)
+        # Initialize trajectory history to store agent positions for line drawing
+        self.trajectory_history = []
 
         action_space = _convert_to_space(self.mm_env.action_spec())
         original_obs_space = _convert_to_space(self.mm_env.observation_spec())
@@ -137,7 +151,13 @@ class MMJCENV(gym.Env):
             elif key == "target_color":
                 observation["target_color"] = value
                 self._target_color = value
-            elif key in ["target_pos", "target_vec", "agent_dir", "agent_pos"]:
+            elif key == "agent_pos":
+                new_info[key] = value
+                self._agent_pos = value
+            elif key == "agent_dir":
+                new_info[key] = value
+                self._agent_dir = value
+            elif key in ["target_pos", "target_vec"]:
                 new_info[key] = value
             elif np.prod(value.shape) != 0:
                 sensors.append(value.flatten())
@@ -146,6 +166,7 @@ class MMJCENV(gym.Env):
         new_info["coverage"] = (
             (self.exploration_history > 0).sum() / self.exploration_history.size * 100
         )
+        new_info["maze_map"] = self._get_maze_map()
         return observation, new_info
 
     def reset(self, seed=None, options=None):
@@ -153,8 +174,9 @@ class MMJCENV(gym.Env):
         super().reset(seed=seed)
         self._total_reward = 0.0
         self._time_step = 0
-        # Reset exploration history
+        # Reset exploration history and trajectory
         self.exploration_history.fill(0)
+        self.trajectory_history = []
 
         time_step = self.mm_env.reset()
         observation, info = self._get_obs_and_info(
@@ -194,6 +216,8 @@ class MMJCENV(gym.Env):
             if self.exploration_history[x, y] == 0:
                 exploration_reward = 0.02
             self.exploration_history[x, y] += 1
+            # Store normalized agent position for trajectory drawing
+            self.trajectory_history.append((agent_pos[0], agent_pos[1]))
 
         total_reward = optional_reward + exploration_reward
         return total_reward
@@ -281,18 +305,18 @@ class MMJCENV(gym.Env):
             self.clock = pygame.time.Clock()
 
         if self.render_mode == "human":
-            # Create exploration map visualization
-            exploration_map = self._create_exploration_map()
+            # Create integrated maze map visualization (walls + exploration + targets)
+            maze_map_vis = self._create_maze_map_visualization()
 
-            # First horizontally stack the ego-centric camera views, top down views, and exploration map
+            # Horizontally stack: ego-centric camera, top down view, integrated maze map
             if self.top_camera:
                 combined_image = np.concatenate(
-                    [self._ego_centric_camera, self._top_camera, exploration_map],
+                    [self._ego_centric_camera, self._top_camera, maze_map_vis],
                     axis=1,
                 )
             else:
                 combined_image = np.concatenate(
-                    [self._ego_centric_camera, exploration_map, exploration_map], axis=1
+                    [self._ego_centric_camera, maze_map_vis, maze_map_vis], axis=1
                 )
             combined_surface = pygame.surfarray.make_surface(
                 combined_image.transpose(1, 0, 2)
@@ -357,52 +381,166 @@ class MMJCENV(gym.Env):
             # self.clock.tick(self.metadata["render_fps"])
 
         elif self.render_mode == "rgb_array":  # rgb_array
-            exploration_map = self._create_exploration_map()
+            maze_map_vis = self._create_maze_map_visualization()
             if self.top_camera:
                 return np.concatenate(
-                    [self._ego_centric_camera, self._top_camera, exploration_map],
+                    [self._ego_centric_camera, self._top_camera, maze_map_vis],
                     axis=1,
                 )  # shape (192, 64, 3)
             else:
                 return np.concatenate(
-                    [self._ego_centric_camera, exploration_map, exploration_map], axis=1
+                    [self._ego_centric_camera, maze_map_vis, maze_map_vis], axis=1
                 )  # shape (192, 64, 3)
 
-    def _create_exploration_map(self):
-        """Create a visualization of the exploration history as an RGB image."""
-        height, width = self.exploration_history.shape
-        rgb_image = np.full((height, width, 3), 255, dtype=np.uint8)  # Start with white
+    def _get_maze_map(self):
+        """Get the maze layout as a 2D character array.
 
-        # Find visited cells
-        visited_mask = self.exploration_history > 0
-        if visited_mask.any():
-            visited_counts = self.exploration_history[visited_mask]
+        Returns:
+            np.ndarray: 2D array of characters where:
+                - '*' = default wall (yellow)
+                - '0'-'9' = wall variations with different textures
+                - '.' = floor
+                - 'P' = spawn point
+                - 'G' = target/goal position
+        """
+        return self.mm_env._task._maze_arena._maze.entity_layer.copy()
 
-            # Create 5 segments based on percentiles of visit counts
-            percentiles = np.percentile(visited_counts, np.linspace(0, 100, 6))
-            # percentiles will be [min, 20th, 40th, 60th, 80th, 100th percentile]
+    def _get_wall_colors(self):
+        """Get the current wall colors from the arena's texture mapping.
 
-            # Assign each visited count to a segment (0-4)
-            segments = np.digitize(
-                visited_counts, percentiles[1:-1]
-            )  # bins are percentiles[1] to percentiles[4]
+        Extracts the actual texture colors used in the 3D view by reading
+        the arena's _current_wall_texture dictionary.
 
-            # Map segments to gray values: 0 (lightest) to 4 (darkest)
-            # Lightest gray: 200, darkest: 0, in 5 steps
-            gray_values = np.linspace(200, 0, 5, dtype=np.uint8)
+        Returns:
+            dict: Mapping from wall characters to RGB tuples (0-255).
+        """
+        wall_colors = {}
+        arena = self.mm_env._task._maze_arena
 
-            # Apply gray values to visited cells
-            rgb_image[visited_mask] = gray_values[segments][:, np.newaxis]
+        # Get the current wall texture mapping from the arena
+        if hasattr(arena, "_current_wall_texture"):
+            for wall_char, texture in arena._current_wall_texture.items():
+                # Extract texture name from the texture object
+                texture_name = texture.name if hasattr(texture, "name") else None
+                if texture_name and texture_name in STYLE_01_TEXTURE_COLORS:
+                    wall_colors[wall_char] = np.array(
+                        STYLE_01_TEXTURE_COLORS[texture_name], dtype=np.uint8
+                    )
+                else:
+                    # Fallback to gray if texture not found
+                    wall_colors[wall_char] = np.array([128, 128, 128], dtype=np.uint8)
 
-        # Resize to match camera resolution
+        return wall_colors
+
+    def _create_maze_map_visualization(self):
+        """Create a visualization of the maze with wall colors, targets, and exploration coverage.
+
+        This integrates the maze structure with exploration history:
+        - Walls are shown with their color textures
+        - Unvisited floor cells are shown in white
+        - Visited floor cells are shown in grayscale based on visit frequency
+        - Targets are shown with their assigned colors
+
+        Returns:
+            np.ndarray: RGB image of the integrated maze/exploration map.
+        """
+        maze_map = self._get_maze_map()
+        height, width = maze_map.shape
+
+        # Get wall colors dynamically from the arena's current texture mapping
+        wall_colors = self._get_wall_colors()
+
+        # Create RGB image - white background for unvisited floor
+        rgb_image = np.full((height, width, 3), 255, dtype=np.uint8)
+
+        # Fill in walls with their colors
+        for i in range(height):
+            for j in range(width):
+                char = maze_map[i, j]
+                if char in wall_colors:
+                    rgb_image[i, j] = wall_colors[char]
+
+        # Draw targets as colored circle markers
+        from dm_control import mjcf
+        task = self.mm_env._task
+        arena = task._maze_arena
+
+        # Calculate scale factor for resizing (used for circle radius)
+        scale_factor = self.camera_resolution / height
+        target_radius = max(2, int(scale_factor * 0.4))  # Small circle radius in pixels
+
+        # Resize before drawing targets so circles are properly sized
         rgb_image = cv2.resize(
             rgb_image,
             (self.camera_resolution, self.camera_resolution),
             interpolation=cv2.INTER_NEAREST,
         )
 
-        # Rotate 90 degrees counter-clockwise to match camera orientation
-        rgb_image = cv2.rotate(rgb_image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        # Draw trajectory as a thin black line
+        # agent_pos is in grid coordinates (e.g., 0.1 to maze_size-0.1)
+        # Need to add 1 to account for outer wall, then scale to image
+        if len(self.trajectory_history) > 1:
+            trajectory_pts = []
+            for pos_x, pos_y in self.trajectory_history:
+                # agent_pos is already in grid coords, add 1 for outer wall offset
+                img_x = int((pos_x + 1) * scale_factor)
+                img_y = int((height - 1 - pos_y) * scale_factor)  # flip y-axis
+                trajectory_pts.append((img_x, img_y))
+
+            # Draw polyline connecting all trajectory points
+            pts_array = np.array(trajectory_pts, dtype=np.int32)
+            cv2.polylines(rgb_image, [pts_array], isClosed=False, color=(180, 180, 180), thickness=1)
+
+        for idx, target in enumerate(task._targets):
+            # Get target position from the attachment frame
+            frame = mjcf.get_attachment_frame(target.mjcf_model)
+            if frame is not None and frame.pos is not None:
+                pos = frame.pos
+                # Convert world position to grid coordinates then scale to image coordinates
+                # Add 0.5 to center on the cell
+                grid_x = int((pos[0] / arena._xy_scale + arena._x_offset + 0.5) * scale_factor)
+                grid_y = int((-pos[1] / arena._xy_scale + arena._y_offset + 0.5) * scale_factor)
+                # Ensure within bounds
+                if 0 <= grid_x < self.camera_resolution and 0 <= grid_y < self.camera_resolution:
+                    # Use target color
+                    target_color = tuple(int(c) for c in (task._target_colors[idx] * 255))
+                    cv2.circle(rgb_image, (grid_x, grid_y), target_radius, target_color, -1)
+
+        # Draw agent as a triangle pointing in heading direction
+        if hasattr(self, "_agent_pos") and hasattr(self, "_agent_dir"):
+            # agent_pos is in grid coordinates (0.1 to maze_size-0.1)
+            # Add 1 for outer wall offset, then scale to image
+            agent_x = int((self._agent_pos[0] + 1) * scale_factor)
+            agent_y = int((height - 1 - self._agent_pos[1]) * scale_factor)  # flip y-axis
+
+            # agent_dir is a 2D direction vector
+            # Flip y because image y-axis is inverted, add pi/2 to correct 90 degree offset
+            dir_x, dir_y = self._agent_dir[0], -self._agent_dir[1]
+            angle = np.arctan2(dir_y, dir_x) + np.pi / 2
+
+            # Triangle size
+            triangle_size = max(3, int(scale_factor * 0.6))
+
+            # Calculate triangle vertices (pointing in heading direction)
+            # Front vertex (in direction of heading)
+            front_x = int(agent_x + triangle_size * 1.5 * np.cos(angle))
+            front_y = int(agent_y + triangle_size * 1.5 * np.sin(angle))
+
+            # Back-left vertex
+            back_left_x = int(agent_x + triangle_size * np.cos(angle + 2.5))
+            back_left_y = int(agent_y + triangle_size * np.sin(angle + 2.5))
+
+            # Back-right vertex
+            back_right_x = int(agent_x + triangle_size * np.cos(angle - 2.5))
+            back_right_y = int(agent_y + triangle_size * np.sin(angle - 2.5))
+
+            triangle_pts = np.array(
+                [[front_x, front_y], [back_left_x, back_left_y], [back_right_x, back_right_y]],
+                dtype=np.int32,
+            )
+
+            # Draw filled triangle in cyan color
+            cv2.fillPoly(rgb_image, [triangle_pts], (0, 255, 255))
 
         return rgb_image
 
