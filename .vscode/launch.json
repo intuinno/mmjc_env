@@ -17,7 +17,13 @@
             "request": "launch",
             "program": "${workspaceFolder}/test_mmjc_env.py",
             "console": "integratedTerminal"
-        }, 
+        },        {
+            "name": "test navigation wrapper",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/test_navigation_wrapper.py",
+            "console": "integratedTerminal"
+        },  
 
     ]
 }

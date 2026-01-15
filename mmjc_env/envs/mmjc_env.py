@@ -52,7 +52,7 @@ class MMJCENV(gym.Env):
         self.window_size = 512  # The size of the PyGame window
         self.top_camera = top_camera
         self.optional_reward = optional_reward
-        self.seed = seed
+        self._seed = seed
         self.time_limit = time_limit
         self.exploration_reward = exploration_reward
         self.target_reward = target_reward
@@ -131,6 +131,11 @@ class MMJCENV(gym.Env):
         """
         self.window = None
         self.clock = None
+        self._cached_wall_colors = None
+
+    def _calculate_coverage(self):
+        """Calculate exploration coverage percentage."""
+        return (self.exploration_history > 0).sum() / self.exploration_history.size * 100
 
     # 1. We will move 'top_camera' to info
     # 2. We rename 'walker/egocentric_camera' to 'image'
@@ -163,9 +168,7 @@ class MMJCENV(gym.Env):
                 sensors.append(value.flatten())
 
         observation["sensors"] = np.concatenate(sensors)
-        new_info["coverage"] = (
-            (self.exploration_history > 0).sum() / self.exploration_history.size * 100
-        )
+        new_info["coverage"] = self._calculate_coverage()
         new_info["maze_map"] = self._get_maze_map()
         return observation, new_info
 
@@ -179,6 +182,8 @@ class MMJCENV(gym.Env):
         self.trajectory_history = []
 
         time_step = self.mm_env.reset()
+        # Cache wall colors after maze reset
+        self._cached_wall_colors = self._get_wall_colors()
         observation, info = self._get_obs_and_info(
             time_step.observation,
         )
@@ -360,13 +365,9 @@ class MMJCENV(gym.Env):
 
             # Display coverage over the exploration map (third panel)
             coverage_text = font.render(
-                f"Coverage: {(self.exploration_history > 0).sum() / self.exploration_history.size * 100:.1f}%",
+                f"Coverage: {self._calculate_coverage():.1f}%",
                 True,
-                (
-                    0,
-                    0,
-                    0,
-                ),  # White text for better visibility on colored background
+                (0, 0, 0),
             )
             # Position over the third panel (exploration map)
             coverage_x = 2 * self.window_size + 10
@@ -447,8 +448,8 @@ class MMJCENV(gym.Env):
         maze_map = self._get_maze_map()
         height, width = maze_map.shape
 
-        # Get wall colors dynamically from the arena's current texture mapping
-        wall_colors = self._get_wall_colors()
+        # Use cached wall colors (computed in reset)
+        wall_colors = self._cached_wall_colors or self._get_wall_colors()
 
         # Create RGB image - white background for unvisited floor
         rgb_image = np.full((height, width, 3), 255, dtype=np.uint8)
@@ -544,7 +545,15 @@ class MMJCENV(gym.Env):
 
         return rgb_image
 
+    def seed(self, seed=None):
+        """Set the random seed for the environment."""
+        self._seed = seed
+        self.np_random = np.random.default_rng(seed)
+        return [seed]
+
     def close(self):
         if self.window is not None:
             pygame.display.quit()
             pygame.quit()
+        if hasattr(self, "mm_env") and hasattr(self.mm_env, "close"):
+            self.mm_env.close()
