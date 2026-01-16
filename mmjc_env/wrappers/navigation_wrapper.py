@@ -48,6 +48,9 @@ class NavigationWrapper(gym.Wrapper):
         # Goal position (continuous, for reward calculation)
         self.goal_pos = None
 
+        # Track previous distance for progress-based reward
+        self._prev_distance = None
+
         # Track total reward for display
         self._total_reward = 0.0
         self._last_reward = 0.0
@@ -113,16 +116,18 @@ class NavigationWrapper(gym.Wrapper):
 
         return one_hot
 
-    def _generate_random_goal(self, maze_map):
-        """Generate a random goal position avoiding walls.
+    def _generate_random_goal(self, maze_map, agent_pos, min_distance=2.0):
+        """Generate a random goal position avoiding walls and agent location.
 
         Args:
             maze_map: 2D character array of the maze
+            agent_pos: Current agent position to avoid
+            min_distance: Minimum distance from agent (default: 2.0 grid units)
 
         Returns:
             Tuple (x, y) of goal position in grid coordinates
         """
-        # Find all floor cells (non-wall positions)
+        # Find all floor cells (non-wall positions) that are far enough from agent
         floor_positions = []
         height, width = maze_map.shape
 
@@ -136,10 +141,25 @@ class NavigationWrapper(gym.Wrapper):
                     inner_x = j - 1
                     inner_y = (height - 2) - i  # Flip y-axis: row 1 -> inner_y = maze_size-1
                     if 0 <= inner_x < self.maze_size and 0 <= inner_y < self.maze_size:
-                        floor_positions.append((inner_x, inner_y))
+                        # Check distance from agent
+                        dist = np.sqrt((inner_x + 0.5 - agent_pos[0])**2 +
+                                       (inner_y + 0.5 - agent_pos[1])**2)
+                        if dist >= min_distance:
+                            floor_positions.append((inner_x, inner_y))
 
         if not floor_positions:
-            # Fallback: return center of maze
+            # Fallback: use any floor position if none far enough
+            for i in range(height):
+                for j in range(width):
+                    char = maze_map[i, j]
+                    if char in ['.', 'P', 'G', ord('.'), ord('P'), ord('G')]:
+                        inner_x = j - 1
+                        inner_y = (height - 2) - i
+                        if 0 <= inner_x < self.maze_size and 0 <= inner_y < self.maze_size:
+                            floor_positions.append((inner_x, inner_y))
+
+        if not floor_positions:
+            # Final fallback: return center of maze
             return (self.maze_size // 2, self.maze_size // 2)
 
         # Randomly select a floor position
@@ -176,23 +196,35 @@ class NavigationWrapper(gym.Wrapper):
         return new_obs
 
     def _calculate_reward(self, info):
-        """Calculate reward based on distance to goal.
+        """Calculate reward based on progress toward goal.
 
         Args:
             info: Info dict containing agent_pos
 
         Returns:
-            Dense reward: Negative MSE distance
+            Dense reward: Change in distance (positive = getting closer)
             Sparse reward: 0 if at goal grid location, -1 otherwise
         """
         agent_pos = info.get("agent_pos", np.array([0.0, 0.0]))
 
         if self.dense_reward:
-            # Dense reward: negative MSE distance (squared Euclidean distance)
-            dx = agent_pos[0] - self.goal_pos[0]
-            dy = agent_pos[1] - self.goal_pos[1]
-            mse_distance = dx**2 + dy**2
-            return -mse_distance
+            # Calculate current distance
+            current_distance = np.sqrt(
+                (agent_pos[0] - self.goal_pos[0])**2 +
+                (agent_pos[1] - self.goal_pos[1])**2
+            )
+
+            # Reward is progress (reduction in distance)
+            # Positive when getting closer, negative when getting further
+            progress_reward = self._prev_distance - current_distance
+
+            # Update previous distance for next step
+            self._prev_distance = current_distance
+
+            # Add goal bonus when very close
+            goal_bonus = 1.0 if current_distance < 0.5 else 0.0
+
+            return progress_reward + goal_bonus
         else:
             # Sparse reward: 0 if at goal grid location, -1 otherwise
             agent_grid_x = int(agent_pos[0])
@@ -233,13 +265,22 @@ class NavigationWrapper(gym.Wrapper):
         elif not hasattr(self, 'np_random'):
             self.np_random = np.random.default_rng()
 
-        # Generate random goal position using maze map from info
+        # Get agent position for goal generation and distance calculation
+        agent_pos = info.get("agent_pos", np.array([0.0, 0.0]))
+
+        # Generate random goal position using maze map, avoiding agent location
         maze_map = info.get("maze_map")
         if maze_map is not None:
-            self.goal_pos = self._generate_random_goal(maze_map)
+            self.goal_pos = self._generate_random_goal(maze_map, agent_pos)
         else:
             # Fallback: center of maze
             self.goal_pos = (self.maze_size / 2, self.maze_size / 2)
+
+        # Initialize previous distance for progress-based reward
+        self._prev_distance = np.sqrt(
+            (agent_pos[0] - self.goal_pos[0])**2 +
+            (agent_pos[1] - self.goal_pos[1])**2
+        )
 
         # Transform observation
         new_obs = self._transform_observation(obs, info)
