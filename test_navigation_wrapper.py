@@ -3,7 +3,7 @@ import mmjc_env
 from mmjc_env.wrappers import NavigationWrapper
 
 # Create base environment
-env = gymnasium.make("mmjc-low-navigation", render_mode="human")
+env = gymnasium.make("mmjc-low-navigation-no-wall", render_mode="human")
 
 # Wrap with NavigationWrapper (dense_reward=True by default)
 env = NavigationWrapper(env, heading_bins=12, dense_reward=True)

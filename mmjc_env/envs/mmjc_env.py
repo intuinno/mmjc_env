@@ -47,6 +47,8 @@ class MMJCENV(gym.Env):
         num_targets=3,
         exploration_reward=False,
         target_reward=True,
+        room_min_size=3,
+        room_max_size=5,
     ):
         # self.maze_size = maze_size  # The size of the maze (maze_size x maze_size)
         self.window_size = 512  # The size of the PyGame window
@@ -69,8 +71,8 @@ class MMJCENV(gym.Env):
             maze_size,
             num_targets,
             time_limit=time_limit,
-            room_min_size=3,
-            room_max_size=5,
+            room_min_size=room_min_size,
+            room_max_size=room_max_size,
             global_observables=global_observables,
             image_only_obs=False,
             top_camera=top_camera,

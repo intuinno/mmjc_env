@@ -84,3 +84,20 @@ register(
         "target_reward": False,
     },
 )
+
+
+register(
+    id="mmjc-low-navigation-no-wall",
+    entry_point="mmjc_env.envs:MMJCENV",
+    kwargs={
+        "maze_size": 13,
+        "num_targets": 5,
+        "time_limit": 50,
+        "exploration_reward": True,
+        "optional_reward": False,
+        "target_reward": False,
+        "targets_per_room": 10,
+        "room_min_size": 13,
+        "room_max_size": 13,
+    },
+)
