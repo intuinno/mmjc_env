@@ -5,7 +5,15 @@ This wrapper transforms the MMJCENV observations and rewards for navigation task
   current position (one-hot x,y), and proprioception (all sensors)
 - Actions: motor control (passthrough from base env)
 - Goal: randomly generated position avoiding walls
-- Reward: dense (negative MSE distance) or sparse (0 at goal, -1 elsewhere)
+- Reward: configurable (progress, sparse, exponential, etc.)
+
+Reward types:
+- "progress": Distance reduction (pure progress, no bonus)
+- "progress_bonus": Distance reduction + goal bonus (+1.0 at goal)
+- "sparse": 0 at goal, -1 elsewhere
+- "neg_dist": Negative distance each step
+- "exponential": exp(-0.5 * distance)
+- "potential": Potential-based reward shaping
 """
 
 import gymnasium as gym
@@ -25,24 +33,41 @@ class NavigationWrapper(gym.Wrapper):
         - current_pos_y: maze_size-dimensional one-hot encoding of current y coordinate
         - proprioception: all sensor information from base environment
 
-    Reward:
-        - Dense: Negative MSE distance between current position and goal position
-        - Sparse: 0 if agent is at goal grid location, -1 otherwise
+    Reward types:
+        - "progress": Distance reduction (pure progress, no bonus)
+        - "progress_bonus": Distance reduction + goal bonus (+1.0 at goal)
+        - "sparse": 0 at goal, -1 elsewhere
+        - "neg_dist": Negative distance each step
+        - "exponential": exp(-0.5 * distance)
+        - "potential": Potential-based reward shaping
     """
 
-    def __init__(self, env, heading_bins=12, dense_reward=True):
+    def __init__(self, env, heading_bins=12, reward_type="progress_bonus",
+                 min_goal_distance=1.0, max_goal_distance=None,
+                 forward_reward_scale=0.0):
         """Initialize the navigation wrapper.
 
         Args:
             env: The base MMJCENV environment
             heading_bins: Number of bins for heading discretization (default: 12)
-            dense_reward: If True, use negative MSE distance as reward.
-                         If False, use sparse reward (0 at goal, -1 elsewhere).
+            reward_type: Type of reward function. Options:
+                - "progress": Distance reduction (default)
+                - "progress_bonus": Distance reduction + goal bonus
+                - "sparse": 0 at goal, -1 elsewhere
+                - "neg_dist": Negative distance each step
+                - "exponential": exp(-0.5 * distance)
+                - "potential": Potential-based reward shaping
+            min_goal_distance: Minimum distance from agent to goal (default: 1.0)
+            max_goal_distance: Maximum distance from agent to goal (None = no limit)
+            forward_reward_scale: Scale for forward velocity bonus (0 = disabled)
         """
         super().__init__(env)
 
         self.heading_bins = heading_bins
-        self.dense_reward = dense_reward
+        self.reward_type = reward_type
+        self.min_goal_distance = min_goal_distance
+        self.max_goal_distance = max_goal_distance
+        self.forward_reward_scale = forward_reward_scale
         self.maze_size = env.unwrapped.mm_env._task._maze_arena._maze.width - 2  # Exclude outer walls
 
         # Goal position (continuous, for reward calculation)
@@ -116,19 +141,19 @@ class NavigationWrapper(gym.Wrapper):
 
         return one_hot
 
-    def _generate_random_goal(self, maze_map, agent_pos, min_distance=2.0):
-        """Generate a random goal position avoiding walls and agent location.
+    def _generate_random_goal(self, maze_map, agent_pos):
+        """Generate a random goal position avoiding walls and within distance constraints.
 
         Args:
             maze_map: 2D character array of the maze
-            agent_pos: Current agent position to avoid
-            min_distance: Minimum distance from agent (default: 2.0 grid units)
+            agent_pos: Current agent position
 
         Returns:
             Tuple (x, y) of goal position in grid coordinates
         """
-        # Find all floor cells (non-wall positions) that are far enough from agent
-        floor_positions = []
+        # Find all floor cells (non-wall positions) within distance constraints
+        valid_positions = []
+        all_floor_positions = []
         height, width = maze_map.shape
 
         for i in range(height):
@@ -141,22 +166,16 @@ class NavigationWrapper(gym.Wrapper):
                     inner_x = j - 1
                     inner_y = (height - 2) - i  # Flip y-axis: row 1 -> inner_y = maze_size-1
                     if 0 <= inner_x < self.maze_size and 0 <= inner_y < self.maze_size:
-                        # Check distance from agent
+                        all_floor_positions.append((inner_x, inner_y))
+                        # Check distance constraints
                         dist = np.sqrt((inner_x + 0.5 - agent_pos[0])**2 +
                                        (inner_y + 0.5 - agent_pos[1])**2)
-                        if dist >= min_distance:
-                            floor_positions.append((inner_x, inner_y))
+                        if dist >= self.min_goal_distance:
+                            if self.max_goal_distance is None or dist <= self.max_goal_distance:
+                                valid_positions.append((inner_x, inner_y))
 
-        if not floor_positions:
-            # Fallback: use any floor position if none far enough
-            for i in range(height):
-                for j in range(width):
-                    char = maze_map[i, j]
-                    if char in ['.', 'P', 'G', ord('.'), ord('P'), ord('G')]:
-                        inner_x = j - 1
-                        inner_y = (height - 2) - i
-                        if 0 <= inner_x < self.maze_size and 0 <= inner_y < self.maze_size:
-                            floor_positions.append((inner_x, inner_y))
+        # Use valid positions if available, otherwise fall back to all floor positions
+        floor_positions = valid_positions if valid_positions else all_floor_positions
 
         if not floor_positions:
             # Final fallback: return center of maze
@@ -195,47 +214,112 @@ class NavigationWrapper(gym.Wrapper):
 
         return new_obs
 
-    def _calculate_reward(self, info):
-        """Calculate reward based on progress toward goal.
+    def _get_forward_velocity(self, obs, info):
+        """Calculate forward velocity from velocimeter sensor.
+
+        Forward velocity is the component of torso velocity in the agent's
+        facing direction. Positive = moving forward, negative = moving backward.
+
+        Args:
+            obs: Observation dict (not used, kept for API consistency)
+            info: Info dict containing agent_dir
+
+        Returns:
+            Forward velocity (scalar)
+        """
+        base_env = self.env.unwrapped
+        # Access raw velocimeter from the base environment's mm_env
+        # The velocimeter is stored in time_step.observation after step()
+        try:
+            raw_obs = base_env.mm_env._observation
+            if raw_obs is not None and "walker/sensors_velocimeter" in raw_obs:
+                velocimeter = raw_obs["walker/sensors_velocimeter"]
+                agent_dir = info.get("agent_dir", np.array([1.0, 0.0]))
+                # velocimeter is [vx, vy, vz] in world frame
+                # Forward velocity = dot product of velocity_xy with agent_dir
+                forward_vel = velocimeter[0] * agent_dir[0] + velocimeter[1] * agent_dir[1]
+                return float(forward_vel)
+        except (AttributeError, KeyError):
+            pass
+        return 0.0
+
+    def _reward_progress(self, agent_pos, distance):
+        """Pure progress reward: distance reduction."""
+        reward = self._prev_distance - distance
+        self._prev_distance = distance
+        return reward
+
+    def _reward_progress_bonus(self, agent_pos, distance):
+        """Progress reward with goal bonus."""
+        reward = self._prev_distance - distance
+        self._prev_distance = distance
+        goal_bonus = 1.0 if distance < 0.5 else 0.0
+        return reward + goal_bonus
+
+    def _reward_sparse(self, agent_pos, distance):
+        """Sparse reward: 0 at goal, -1 elsewhere."""
+        agent_grid_x = int(agent_pos[0])
+        agent_grid_y = int(agent_pos[1])
+        goal_grid_x = int(self.goal_pos[0])
+        goal_grid_y = int(self.goal_pos[1])
+        if agent_grid_x == goal_grid_x and agent_grid_y == goal_grid_y:
+            return 0.0
+        return -1.0
+
+    def _reward_neg_dist(self, agent_pos, distance):
+        """Negative distance reward: -d each step."""
+        return -distance
+
+    def _reward_exponential(self, agent_pos, distance):
+        """Exponential reward: exp(-0.5 * distance), peaks at goal."""
+        return np.exp(-0.5 * distance)
+
+    def _reward_potential(self, agent_pos, distance):
+        """Potential-based reward shaping: gamma * phi(s') - phi(s)."""
+        gamma = 0.99
+        reward = gamma * (-distance) - (-self._prev_distance)
+        self._prev_distance = distance
+        return reward
+
+    def _calculate_reward(self, info, obs=None):
+        """Calculate reward based on reward_type.
 
         Args:
             info: Info dict containing agent_pos
+            obs: Observation dict (needed for forward velocity)
 
         Returns:
-            Dense reward: Change in distance (positive = getting closer)
-            Sparse reward: 0 if at goal grid location, -1 otherwise
+            Reward value based on selected reward type
         """
         agent_pos = info.get("agent_pos", np.array([0.0, 0.0]))
+        distance = np.sqrt(
+            (agent_pos[0] - self.goal_pos[0])**2 +
+            (agent_pos[1] - self.goal_pos[1])**2
+        )
 
-        if self.dense_reward:
-            # Calculate current distance
-            current_distance = np.sqrt(
-                (agent_pos[0] - self.goal_pos[0])**2 +
-                (agent_pos[1] - self.goal_pos[1])**2
-            )
-
-            # Reward is progress (reduction in distance)
-            # Positive when getting closer, negative when getting further
-            progress_reward = self._prev_distance - current_distance
-
-            # Update previous distance for next step
-            self._prev_distance = current_distance
-
-            # Add goal bonus when very close
-            goal_bonus = 1.0 if current_distance < 0.5 else 0.0
-
-            return progress_reward + goal_bonus
+        # Dispatch to appropriate reward function
+        if self.reward_type == "progress":
+            base_reward = self._reward_progress(agent_pos, distance)
+        elif self.reward_type == "progress_bonus":
+            base_reward = self._reward_progress_bonus(agent_pos, distance)
+        elif self.reward_type == "sparse":
+            base_reward = self._reward_sparse(agent_pos, distance)
+        elif self.reward_type == "neg_dist":
+            base_reward = self._reward_neg_dist(agent_pos, distance)
+        elif self.reward_type == "exponential":
+            base_reward = self._reward_exponential(agent_pos, distance)
+        elif self.reward_type == "potential":
+            base_reward = self._reward_potential(agent_pos, distance)
         else:
-            # Sparse reward: 0 if at goal grid location, -1 otherwise
-            agent_grid_x = int(agent_pos[0])
-            agent_grid_y = int(agent_pos[1])
-            goal_grid_x = int(self.goal_pos[0])
-            goal_grid_y = int(self.goal_pos[1])
+            raise ValueError(f"Unknown reward_type: {self.reward_type}")
 
-            if agent_grid_x == goal_grid_x and agent_grid_y == goal_grid_y:
-                return 0.0
-            else:
-                return -1.0
+        # Add forward velocity bonus if enabled
+        if self.forward_reward_scale > 0 and obs is not None:
+            forward_vel = self._get_forward_velocity(obs, info)
+            forward_reward = self.forward_reward_scale * max(0, forward_vel)
+            return base_reward + forward_reward
+
+        return base_reward
 
     def reset(self, seed=None, options=None):
         """Reset the environment and generate a new random goal.
@@ -322,8 +406,8 @@ class NavigationWrapper(gym.Wrapper):
         # Transform observation
         new_obs = self._transform_observation(obs, info)
 
-        # Calculate navigation reward (MSE distance)
-        reward = self._calculate_reward(info)
+        # Calculate navigation reward
+        reward = self._calculate_reward(info, obs)
 
         # Track reward for display
         self._last_reward = reward
