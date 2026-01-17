@@ -516,10 +516,10 @@ class MMJCENV(gym.Env):
             agent_x = int((self._agent_pos[0] + 1) * scale_factor)
             agent_y = int((height - 1 - self._agent_pos[1]) * scale_factor)  # flip y-axis
 
-            # agent_dir is a 2D direction vector
-            # Flip y because image y-axis is inverted, add pi/2 to correct 90 degree offset
+            # agent_dir is a 2D direction vector (forward direction from rotation matrix column 0)
+            # Flip y because image y-axis is inverted
             dir_x, dir_y = self._agent_dir[0], -self._agent_dir[1]
-            angle = np.arctan2(dir_y, dir_x) + np.pi / 2
+            angle = np.arctan2(dir_y, dir_x)
 
             # Triangle size
             triangle_size = max(3, int(scale_factor * 0.6))

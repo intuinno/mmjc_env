@@ -5,8 +5,15 @@ from mmjc_env.wrappers import NavigationWrapper
 # Create base environment
 env = gymnasium.make("mmjc-low-navigation-no-wall", render_mode="human")
 
-# Wrap with NavigationWrapper (dense_reward=True by default)
-env = NavigationWrapper(env, heading_bins=12, dense_reward=True)
+# Wrap with NavigationWrapper
+env = NavigationWrapper(
+    env,
+    heading_bins=12,
+    reward_type="progress",
+    min_goal_distance=1.0,
+    max_goal_distance=3.0,
+    forward_reward_scale=0.1,
+)
 
 obs, info = env.reset()
 print(f"Observation keys: {obs.keys()}")

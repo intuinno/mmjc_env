@@ -159,8 +159,9 @@ class NavigationWrapper(gym.Wrapper):
         for i in range(height):
             for j in range(width):
                 char = maze_map[i, j]
-                # Floor cells are '.', 'P' (spawn), or 'G' (existing goals)
-                if char in ['.', 'P', 'G', ord('.'), ord('P'), ord('G')]:
+                # Floor cells are ' ' (empty), '.', 'P' (spawn), or 'G' (existing goals)
+                # Note: maze_map can be string or int array depending on source
+                if char in [' ', '.', 'P', 'G', ord(' '), ord('.'), ord('P'), ord('G')]:
                     # Convert to inner maze coordinates (subtract 1 for outer wall)
                     # i is row index (0 at top), but world y=0 is at bottom
                     inner_x = j - 1
@@ -317,8 +318,9 @@ class NavigationWrapper(gym.Wrapper):
         else:
             raise ValueError(f"Unknown reward_type: {self.reward_type}")
 
-        # Add forward velocity bonus if enabled
-        if self.forward_reward_scale > 0 and obs is not None:
+        # Add forward velocity bonus if enabled AND making progress toward goal
+        # This prevents rewarding the agent for just running in circles
+        if self.forward_reward_scale > 0 and obs is not None and base_reward > 0:
             forward_vel = self._get_forward_velocity(obs, info)
             forward_reward = self.forward_reward_scale * max(0, forward_vel)
             return base_reward + forward_reward
@@ -499,9 +501,9 @@ class NavigationWrapper(gym.Wrapper):
             dist_rect = dist_text.get_rect(topleft=(goal_rect.right + 20, 10))
             base_env.window.blit(dist_text, dist_rect)
 
-            # Display reward (total reward for the episode)
+            # Display return (cumulative reward for the episode)
             reward_text = font.render(
-                f"Reward: {self._total_reward:.2f}", True, (0, 0, 0)
+                f"Return: {self._total_reward:.2f}", True, (0, 0, 0)
             )
             reward_rect = reward_text.get_rect(topleft=(dist_rect.right + 20, 10))
             base_env.window.blit(reward_text, reward_rect)
