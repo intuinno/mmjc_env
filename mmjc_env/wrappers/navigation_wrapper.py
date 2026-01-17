@@ -228,23 +228,19 @@ class NavigationWrapper(gym.Wrapper):
 
         Args:
             obs: Observation dict (not used, kept for API consistency)
-            info: Info dict containing agent_dir
+            info: Info dict containing agent_dir and velocimeter data
 
         Returns:
             Forward velocity (scalar)
         """
-        base_env = self.env.unwrapped
-        # Access raw velocimeter from the base environment's mm_env
-        # The velocimeter is stored in time_step.observation after step()
         try:
-            raw_obs = base_env.mm_env._observation
-            if raw_obs is not None and "walker/sensors_velocimeter" in raw_obs:
-                velocimeter = raw_obs["walker/sensors_velocimeter"]
+            if "velocimeter" in info:
+                velocimeter = info["velocimeter"]
                 # velocimeter is [vx, vy, vz] in LOCAL site frame (not world frame!)
                 # For ant: forward direction is local X-axis, so forward velocity = vx_local
                 forward_vel = velocimeter[0]
                 return float(forward_vel)
-        except (AttributeError, KeyError):
+        except (AttributeError, KeyError, IndexError):
             pass
         return 0.0
 
@@ -323,6 +319,7 @@ class NavigationWrapper(gym.Wrapper):
         if self.forward_reward_scale > 0 and obs is not None and base_reward > 0:
             forward_vel = self._get_forward_velocity(obs, info)
             forward_reward = self.forward_reward_scale * max(0, forward_vel)
+            self.forward_reward = forward_reward
             return base_reward + forward_reward
 
         return base_reward
@@ -381,6 +378,7 @@ class NavigationWrapper(gym.Wrapper):
         # Reset reward tracking
         self._total_reward = 0.0
         self._last_reward = 0.0
+        self.forward_reward = 0.0
 
         # Render with our custom goal visualization
         if original_render_mode == "human":
@@ -514,6 +512,13 @@ class NavigationWrapper(gym.Wrapper):
             )
             time_rect = time_text.get_rect(topleft=(reward_rect.right + 20, 10))
             base_env.window.blit(time_text, time_rect)
+
+            # Display forward reward 
+            forward_reward_text = font.render(
+                f"Forward Reward: {self.forward_reward}", True, (0, 0, 0)
+            )
+            forward_reward_text_rect = forward_reward_text.get_rect(topleft=(time_rect.right + 20, 10))
+            base_env.window.blit(forward_reward_text, forward_reward_text_rect)
 
             # Display coverage over the third panel
             coverage_text = font.render(
