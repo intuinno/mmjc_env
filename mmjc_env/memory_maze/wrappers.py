@@ -152,7 +152,9 @@ class AgentPositionWrapper(ObservationWrapper):
         # and top-right coordinate for a 15x15 maze is (14.9,14.9)
         obs['agent_pos'] = walker_ji
         # Pick orientation vector such, that going forward increases agent_pos in the direction of agent_dir.
-        obs['agent_dir'] = obs['absolute_orientation'][:2, 1]
+        # The ant's forward direction is the local X-axis (column 0 of the rotation matrix).
+        # Column 0 gives the local X-axis expressed in world coordinates.
+        obs['agent_dir'] = obs['absolute_orientation'][:2, 0]
         return obs
 
 

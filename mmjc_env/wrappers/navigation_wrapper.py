@@ -222,8 +222,8 @@ class NavigationWrapper(gym.Wrapper):
 
         Note: The MuJoCo velocimeter sensor outputs velocity in the site's LOCAL
         frame, not world frame. For the ant agent, the forward direction corresponds
-        to the local Y-axis (since agent_dir is derived from absolute_orientation[:2, 1]).
-        Therefore, forward velocity is simply velocimeter[1].
+        to the local X-axis (since agent_dir is derived from absolute_orientation[:2, 0]).
+        Therefore, forward velocity is simply velocimeter[0].
 
         Args:
             obs: Observation dict (not used, kept for API consistency)
@@ -240,8 +240,8 @@ class NavigationWrapper(gym.Wrapper):
             if raw_obs is not None and "walker/sensors_velocimeter" in raw_obs:
                 velocimeter = raw_obs["walker/sensors_velocimeter"]
                 # velocimeter is [vx, vy, vz] in LOCAL site frame (not world frame!)
-                # For ant: forward direction is local Y-axis, so forward velocity = vy_local
-                forward_vel = velocimeter[1]
+                # For ant: forward direction is local X-axis, so forward velocity = vx_local
+                forward_vel = velocimeter[0]
                 return float(forward_vel)
         except (AttributeError, KeyError):
             pass
