@@ -105,7 +105,7 @@ class MMJCENV(gym.Env):
                 "target_vec",
                 "agent_dir",
                 "agent_pos",
-                "walker/sensors_velocimeter",
+                # Note: walker/sensors_velocimeter is now included in sensors
             ]:  # Exclude these keys
                 total_sensor_dim += np.prod(value.shape)
 
@@ -167,6 +167,7 @@ class MMJCENV(gym.Env):
                 self._agent_dir = value
             elif key == "walker/sensors_velocimeter":
                 new_info["velocimeter"] = value
+                sensors.append(value.flatten())  # Also include in sensors observation
             elif key in ["target_pos", "target_vec"]:
                 new_info[key] = value
             elif np.prod(value.shape) != 0:

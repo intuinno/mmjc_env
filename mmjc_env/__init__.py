@@ -101,3 +101,9 @@ register(
         "room_max_size": 13,
     },
 )
+
+# Taxi Navigation Environment - Ant on flat ground with goal switching
+register(
+    id="TaxiNavigation-v0",
+    entry_point="mmjc_env.envs:TaxiNavigationEnv",
+)
