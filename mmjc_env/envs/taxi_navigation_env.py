@@ -144,8 +144,8 @@ class TaxiNavigationTask(composer.Task):
         error = abs(forward_vel - self.target_forward_velocity)
         reward = np.exp(-0.5 * (error / self.velocity_tolerance) ** 2)
         # Penalize backward movement
-        if forward_vel < 0:
-            reward -= 0.5 * abs(forward_vel)
+        # if forward_vel < 0:
+        #     reward -= 0.5 * abs(forward_vel)
         return reward
 
     def _reward_rotation(self, angular_vel: float, clockwise: bool) -> float:
