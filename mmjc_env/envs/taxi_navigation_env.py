@@ -34,7 +34,7 @@ class TaxiNavigationTask(composer.Task):
         self,
         walker,
         arena,
-        goal_switch_interval: int = 100,
+        goal_switch_interval: int = 20,
         target_forward_velocity: float = 1.0,
         target_angular_velocity: float = 0.5,
         velocity_tolerance: float = 0.3,
