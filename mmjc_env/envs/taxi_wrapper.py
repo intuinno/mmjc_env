@@ -54,8 +54,8 @@ class TaxiWrapper(gym.Wrapper):
             
         reward = self._calculate_reward(info)
         
-        info["goal_idx"] = self.current_goal_idx
-        info["goal_name"] = ["Forward", "CW", "CCW"][self.current_goal_idx]
+        goal_names = ["FORWARD", "ROTATE_CW", "ROTATE_CCW"]
+        info["current_goal"] = goal_names[self.current_goal_idx]
         
         return self._get_obs(obs), reward, terminated, truncated, info
         
@@ -79,22 +79,19 @@ class TaxiWrapper(gym.Wrapper):
         reward = 0.0
         
         if self.current_goal_idx == 0: # Forward
+            # Reward for moving forward
             reward = forward_vel
         elif self.current_goal_idx == 1: # CW (Right)
-            reward = -angular_vel
+            # Reward for correct rotation, penalize forward movement to encourage turning in place
+            reward = -angular_vel - abs(forward_vel)
         elif self.current_goal_idx == 2: # CCW (Left)
-            reward = angular_vel
+            # Reward for correct rotation, penalize forward movement to encourage turning in place
+            reward = angular_vel - abs(forward_vel)
             
         return reward
 
     def render(self):
         self.env.render()
-        # Overlay command
-        base_env = self.env.unwrapped
-        if base_env.window is not None and base_env.render_mode == "human":
-            font = pygame.font.SysFont("Arial", 24)
-            cmd_name = ["Forward", "CW", "CCW"][self.current_goal_idx]
-            text = font.render(f"Command: {cmd_name}", True, (255, 0, 0))
-            # Draw at top center or somewhere visible
-            base_env.window.blit(text, (base_env.window_size + 10, 50))
-            pygame.display.flip()
+        # The rendering of the taxi goal is now handled by the play script.
+        # The previous overlay logic here conflicted with the underlying
+        # NavigationWrapper's render loop.
