@@ -38,6 +38,7 @@ class TaxiNavigationTask(composer.Task):
         target_forward_velocity: float = 1.0,
         target_angular_velocity: float = 0.5,
         velocity_tolerance: float = 0.3,
+        penalty_scale: float = 0.3,
         physics_timestep: float = 0.005,
         control_timestep: float = 0.025,
     ):
@@ -61,6 +62,7 @@ class TaxiNavigationTask(composer.Task):
         self.target_forward_velocity = target_forward_velocity
         self.target_angular_velocity = target_angular_velocity
         self.velocity_tolerance = velocity_tolerance
+        self.penalty_scale = penalty_scale
 
         # State
         self.current_goal = GoalType.FORWARD
@@ -132,37 +134,37 @@ class TaxiNavigationTask(composer.Task):
         forward_vel = self.get_forward_velocity(physics)
         angular_vel = self.get_angular_velocity(physics)
 
+        reward = 0.0
+
         if self.current_goal == GoalType.FORWARD:
-            return self._reward_forward(forward_vel, angular_vel)
+            reward = self._reward_forward(forward_vel, angular_vel)
         elif self.current_goal == GoalType.ROTATE_CW:
-            return self._reward_rotation(angular_vel, clockwise=True)
+            # Also penalize forward velocity during rotation
+            reward = self._reward_rotation(angular_vel, clockwise=True) - self.penalty_scale * abs(forward_vel)
         else:  # ROTATE_CCW
-            return self._reward_rotation(angular_vel, clockwise=False)
+            # Also penalize forward velocity during rotation
+            reward = self._reward_rotation(angular_vel, clockwise=False) - self.penalty_scale * abs(forward_vel)
+        
+        return reward
 
     def _reward_forward(self, forward_vel: float, angular_vel: float) -> float:
         """Reward for forward movement, penalizing angular velocity.
 
-        - Gaussian reward for matching target forward velocity.
-        - Linear penalty for any angular velocity to encourage straight movement.
+        - Linear reward for forward velocity.
+        - Scaled linear penalty for any angular velocity to encourage straight movement.
         """
-        forward_error = abs(forward_vel - self.target_forward_velocity)
-        forward_reward = np.exp(-0.5 * (forward_error / self.velocity_tolerance) ** 2)
-        reward = forward_reward - abs(angular_vel)
-        return reward
+        return forward_vel - self.penalty_scale * abs(angular_vel)
 
     def _reward_rotation(self, angular_vel: float, clockwise: bool) -> float:
-        """Gaussian reward for rotation at target angular velocity.
+        """Linear reward for rotation.
 
         Clockwise = negative angular velocity (looking down)
         Counter-clockwise = positive angular velocity
         """
         if clockwise:
-            expected = -self.target_angular_velocity
+            return -angular_vel
         else:
-            expected = self.target_angular_velocity
-
-        error = abs(angular_vel - expected)
-        return np.exp(-0.5 * (error / self.velocity_tolerance) ** 2)
+            return angular_vel
 
     def get_discount(self, physics):
         """Return discount factor."""
@@ -197,6 +199,7 @@ class TaxiNavigationEnv(gymnasium.Env):
         target_forward_velocity: float = 1.0,
         target_angular_velocity: float = 0.5,
         velocity_tolerance: float = 0.3,
+        penalty_scale: float = 0.3,
         time_limit: float = 30.0,
         render_mode: str = None,
     ):
@@ -228,6 +231,7 @@ class TaxiNavigationEnv(gymnasium.Env):
             target_forward_velocity=target_forward_velocity,
             target_angular_velocity=target_angular_velocity,
             velocity_tolerance=velocity_tolerance,
+            penalty_scale=penalty_scale,
         )
 
         # Create dm_control environment

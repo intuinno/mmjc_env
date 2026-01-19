@@ -20,9 +20,21 @@ class TaxiWrapper(gym.Wrapper):
     Rewards:
         - Based on matching target linear and angular velocities.
     """
-    def __init__(self, env, goal_switch_interval=20):
+    def __init__(
+        self,
+        env,
+        goal_switch_interval: int = 20,
+        target_forward_velocity: float = 1.0,
+        target_angular_velocity: float = 0.8,
+        velocity_tolerance: float = 0.4,
+        penalty_scale: float = 0.3,
+    ):
         super().__init__(env)
         self.goal_switch_interval = goal_switch_interval
+        self.target_forward_velocity = target_forward_velocity
+        self.target_angular_velocity = target_angular_velocity
+        self.velocity_tolerance = velocity_tolerance
+        self.penalty_scale = penalty_scale
         
         # Check if wrapped env has proprioception
         if not isinstance(env.observation_space, spaces.Dict) or "proprioception" not in env.observation_space.spaces:
@@ -68,25 +80,23 @@ class TaxiWrapper(gym.Wrapper):
         }
         
     def _calculate_reward(self, info):
-        forward_vel = 0.0
-        if "velocimeter" in info:
-            forward_vel = info["velocimeter"][0]
-            
-        angular_vel = 0.0
-        if "gyro" in info:
-            angular_vel = info["gyro"][2] # Z-axis
-            
+        forward_vel = info.get("velocimeter", [0.0])[0]
+        angular_vel = info.get("gyro", [0.0, 0.0, 0.0])[2]  # Z-axis
+
         reward = 0.0
         
         if self.current_goal_idx == 0: # Forward
-            # Reward for moving forward, penalize angular velocity to encourage straight movement
-            reward = forward_vel - abs(angular_vel)
+            # Linear reward for forward velocity, penalize angular velocity
+            reward = forward_vel  - self.penalty_scale * abs(angular_vel)
+            reward *= 2.0
+
         elif self.current_goal_idx == 1: # CW (Right)
-            # Reward for correct rotation, penalize forward movement to encourage turning in place
-            reward = -angular_vel - abs(forward_vel)
+            # Linear reward for angular velocity, penalize forward velocity
+            reward = -angular_vel - self.penalty_scale * abs(forward_vel)
+
         elif self.current_goal_idx == 2: # CCW (Left)
-            # Reward for correct rotation, penalize forward movement to encourage turning in place
-            reward = angular_vel - abs(forward_vel)
+            # Linear reward for angular velocity, penalize forward velocity
+            reward = angular_vel - self.penalty_scale * abs(forward_vel)
             
         return reward
 
