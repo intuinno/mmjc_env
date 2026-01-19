@@ -168,6 +168,9 @@ class MMJCENV(gym.Env):
             elif key == "walker/sensors_velocimeter":
                 new_info["velocimeter"] = value
                 sensors.append(value.flatten())  # Also include in sensors observation
+            elif key == "walker/sensors_gyro":
+                new_info["gyro"] = value
+                sensors.append(value.flatten())
             elif key in ["target_pos", "target_vec"]:
                 new_info[key] = value
             elif np.prod(value.shape) != 0:
