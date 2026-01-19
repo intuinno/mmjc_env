@@ -133,19 +133,21 @@ class TaxiNavigationTask(composer.Task):
         angular_vel = self.get_angular_velocity(physics)
 
         if self.current_goal == GoalType.FORWARD:
-            return self._reward_forward(forward_vel)
+            return self._reward_forward(forward_vel, angular_vel)
         elif self.current_goal == GoalType.ROTATE_CW:
             return self._reward_rotation(angular_vel, clockwise=True)
         else:  # ROTATE_CCW
             return self._reward_rotation(angular_vel, clockwise=False)
 
-    def _reward_forward(self, forward_vel: float) -> float:
-        """Gaussian reward for forward movement at target velocity."""
-        error = abs(forward_vel - self.target_forward_velocity)
-        reward = np.exp(-0.5 * (error / self.velocity_tolerance) ** 2)
-        # Penalize backward movement
-        # if forward_vel < 0:
-        #     reward -= 0.5 * abs(forward_vel)
+    def _reward_forward(self, forward_vel: float, angular_vel: float) -> float:
+        """Reward for forward movement, penalizing angular velocity.
+
+        - Gaussian reward for matching target forward velocity.
+        - Linear penalty for any angular velocity to encourage straight movement.
+        """
+        forward_error = abs(forward_vel - self.target_forward_velocity)
+        forward_reward = np.exp(-0.5 * (forward_error / self.velocity_tolerance) ** 2)
+        reward = forward_reward - abs(angular_vel)
         return reward
 
     def _reward_rotation(self, angular_vel: float, clockwise: bool) -> float:

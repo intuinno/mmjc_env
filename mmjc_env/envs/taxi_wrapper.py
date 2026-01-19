@@ -79,8 +79,8 @@ class TaxiWrapper(gym.Wrapper):
         reward = 0.0
         
         if self.current_goal_idx == 0: # Forward
-            # Reward for moving forward
-            reward = forward_vel
+            # Reward for moving forward, penalize angular velocity to encourage straight movement
+            reward = forward_vel - abs(angular_vel)
         elif self.current_goal_idx == 1: # CW (Right)
             # Reward for correct rotation, penalize forward movement to encourage turning in place
             reward = -angular_vel - abs(forward_vel)
