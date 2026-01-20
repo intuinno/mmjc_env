@@ -44,7 +44,7 @@ class NavigationWrapper(gym.Wrapper):
 
     def __init__(self, env, heading_bins=12, reward_type="progress_bonus",
                  min_goal_distance=1.0, max_goal_distance=None,
-                 forward_reward_scale=0.0):
+                 forward_reward_scale=0.0, include_image=False):
         """Initialize the navigation wrapper.
 
         Args:
@@ -60,6 +60,7 @@ class NavigationWrapper(gym.Wrapper):
             min_goal_distance: Minimum distance from agent to goal (default: 1.0)
             max_goal_distance: Maximum distance from agent to goal (None = no limit)
             forward_reward_scale: Scale for forward velocity bonus (0 = disabled)
+            include_image: Whether to include image in observation (default: False)
         """
         super().__init__(env)
 
@@ -68,6 +69,7 @@ class NavigationWrapper(gym.Wrapper):
         self.min_goal_distance = min_goal_distance
         self.max_goal_distance = max_goal_distance
         self.forward_reward_scale = forward_reward_scale
+        self.include_image = include_image
         self.maze_size = env.unwrapped.mm_env._task._maze_arena._maze.width - 2  # Exclude outer walls
 
         # Goal position (continuous, for reward calculation)
@@ -94,7 +96,7 @@ class NavigationWrapper(gym.Wrapper):
         }
 
         # Pass through image observation if available
-        if "image" in env.observation_space.spaces:
+        if self.include_image and "image" in env.observation_space.spaces:
             obs_spaces["image"] = env.observation_space["image"]
 
         self.observation_space = spaces.Dict(obs_spaces)
@@ -219,7 +221,7 @@ class NavigationWrapper(gym.Wrapper):
             "proprioception": obs["sensors"].astype(np.float32),
         }
 
-        if "image" in obs:
+        if self.include_image and "image" in obs:
             new_obs["image"] = obs["image"]
 
         return new_obs
