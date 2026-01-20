@@ -83,15 +83,21 @@ class NavigationWrapper(gym.Wrapper):
         # Get proprioception dimension from base environment's sensors
         self.proprioception_dim = env.observation_space["sensors"].shape[0]
 
-        # Define new observation space
-        self.observation_space = spaces.Dict({
+        # Define new observation space keys
+        obs_spaces = {
             "heading": spaces.Box(0, 1, shape=(heading_bins,), dtype=np.float32),
             "goal_pos_x": spaces.Box(0, 1, shape=(self.maze_size,), dtype=np.float32),
             "goal_pos_y": spaces.Box(0, 1, shape=(self.maze_size,), dtype=np.float32),
             "current_pos_x": spaces.Box(0, 1, shape=(self.maze_size,), dtype=np.float32),
             "current_pos_y": spaces.Box(0, 1, shape=(self.maze_size,), dtype=np.float32),
             "proprioception": spaces.Box(-np.inf, np.inf, shape=(self.proprioception_dim,), dtype=np.float32),
-        })
+        }
+
+        # Pass through image observation if available
+        if "image" in env.observation_space.spaces:
+            obs_spaces["image"] = env.observation_space["image"]
+
+        self.observation_space = spaces.Dict(obs_spaces)
 
         # Action space is passed through from base env
         self.action_space = env.action_space
@@ -212,6 +218,9 @@ class NavigationWrapper(gym.Wrapper):
             "current_pos_y": self._get_position_one_hot(agent_pos[1], 1),
             "proprioception": obs["sensors"].astype(np.float32),
         }
+
+        if "image" in obs:
+            new_obs["image"] = obs["image"]
 
         return new_obs
 
@@ -407,11 +416,32 @@ class NavigationWrapper(gym.Wrapper):
         # Restore render mode
         base_env.render_mode = original_render_mode
 
-        # Transform observation
-        new_obs = self._transform_observation(obs, info)
-
         # Calculate navigation reward
         reward = self._calculate_reward(info, obs)
+
+        # Check if goal reached and update if necessary
+        agent_pos = info.get("agent_pos", np.array([0.0, 0.0]))
+        distance = np.sqrt(
+            (agent_pos[0] - self.goal_pos[0])**2 +
+            (agent_pos[1] - self.goal_pos[1])**2
+        )
+
+        if distance < 0.5:
+            # Generate new goal
+            maze_map = info.get("maze_map")
+            if maze_map is not None:
+                self.goal_pos = self._generate_random_goal(maze_map, agent_pos)
+            else:
+                self.goal_pos = (self.maze_size / 2, self.maze_size / 2)
+
+            # Reset previous distance for the new goal
+            self._prev_distance = np.sqrt(
+                (agent_pos[0] - self.goal_pos[0])**2 +
+                (agent_pos[1] - self.goal_pos[1])**2
+            )
+
+        # Transform observation (using updated goal)
+        new_obs = self._transform_observation(obs, info)
 
         # Track reward for display
         self._last_reward = reward
