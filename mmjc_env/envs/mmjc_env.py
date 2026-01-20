@@ -105,8 +105,7 @@ class MMJCENV(gym.Env):
                 "target_vec",
                 "agent_dir",
                 "agent_pos",
-                # Note: walker/sensors_velocimeter is now included in sensors
-            ]:  # Exclude these keys
+            ]:
                 total_sensor_dim += np.prod(value.shape)
 
         new_obs_space = {
@@ -135,6 +134,8 @@ class MMJCENV(gym.Env):
         self.window = None
         self.clock = None
         self._cached_wall_colors = None
+        self._pred_agent_pos = None
+        self._pred_agent_dir = None
 
     def _calculate_coverage(self):
         """Calculate exploration coverage percentage."""
@@ -165,16 +166,14 @@ class MMJCENV(gym.Env):
             elif key == "agent_dir":
                 new_info[key] = value
                 self._agent_dir = value
-            elif key == "walker/sensors_velocimeter":
-                new_info["velocimeter"] = value
-                sensors.append(value.flatten())  # Also include in sensors observation
-            elif key == "walker/sensors_gyro":
-                new_info["gyro"] = value
-                sensors.append(value.flatten())
             elif key in ["target_pos", "target_vec"]:
                 new_info[key] = value
             elif np.prod(value.shape) != 0:
                 sensors.append(value.flatten())
+                if key == "walker/sensors_velocimeter":
+                    new_info["velocimeter"] = value
+                elif key == "walker/sensors_gyro":
+                    new_info["gyro"] = value
 
         observation["sensors"] = np.concatenate(sensors)
         new_info["coverage"] = self._calculate_coverage()
@@ -189,6 +188,8 @@ class MMJCENV(gym.Env):
         # Reset exploration history and trajectory
         self.exploration_history.fill(0)
         self.trajectory_history = []
+        self._pred_agent_pos = None
+        self._pred_agent_dir = None
 
         time_step = self.mm_env.reset()
         # Cache wall colors after maze reset
@@ -551,6 +552,26 @@ class MMJCENV(gym.Env):
 
             # Draw filled triangle in cyan color
             cv2.fillPoly(rgb_image, [triangle_pts], (0, 255, 255))
+
+        # Draw predicted agent as a red triangle
+        if hasattr(self, "_pred_agent_pos") and self._pred_agent_pos is not None and \
+           hasattr(self, "_pred_agent_dir") and self._pred_agent_dir is not None:
+            pred_x = int((self._pred_agent_pos[0] + 1) * scale_factor)
+            pred_y = int((height - 1 - self._pred_agent_pos[1]) * scale_factor)
+
+            p_dir_x, p_dir_y = self._pred_agent_dir[0], -self._pred_agent_dir[1]
+            p_angle = np.arctan2(p_dir_y, p_dir_x)
+
+            triangle_size = max(3, int(scale_factor * 0.6))
+            p_front_x = int(pred_x + triangle_size * 1.5 * np.cos(p_angle))
+            p_front_y = int(pred_y + triangle_size * 1.5 * np.sin(p_angle))
+            p_back_left_x = int(pred_x + triangle_size * np.cos(p_angle + 2.5))
+            p_back_left_y = int(pred_y + triangle_size * np.sin(p_angle + 2.5))
+            p_back_right_x = int(pred_x + triangle_size * np.cos(p_angle - 2.5))
+            p_back_right_y = int(pred_y + triangle_size * np.sin(p_angle - 2.5))
+
+            p_triangle_pts = np.array([[p_front_x, p_front_y], [p_back_left_x, p_back_left_y], [p_back_right_x, p_back_right_y]], dtype=np.int32)
+            cv2.fillPoly(rgb_image, [p_triangle_pts], (255, 0, 0)) # Red
 
         return rgb_image
 
