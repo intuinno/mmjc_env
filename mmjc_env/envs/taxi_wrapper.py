@@ -12,11 +12,12 @@ import pygame
 
 class TaxiWrapper(gym.Wrapper):
     """Wrapper to make mmjc_env behave like TaxiNavigationEnv.
-    
+
     Observations:
         - goal: 3-dim one-hot vector (Forward, CW, CCW)
         - proprioception: from NavigationWrapper
-        
+        - image: RGB image from environment (optional, if include_image=True)
+
     Rewards:
         - Based on matching target linear and angular velocities.
     """
@@ -28,6 +29,7 @@ class TaxiWrapper(gym.Wrapper):
         target_angular_velocity: float = 0.8,
         velocity_tolerance: float = 0.4,
         penalty_scale: float = 0.3,
+        include_image: bool = False,
     ):
         super().__init__(env)
         self.goal_switch_interval = goal_switch_interval
@@ -35,18 +37,28 @@ class TaxiWrapper(gym.Wrapper):
         self.target_angular_velocity = target_angular_velocity
         self.velocity_tolerance = velocity_tolerance
         self.penalty_scale = penalty_scale
-        
+        self.include_image = include_image
+
         # Check if wrapped env has proprioception
         if not isinstance(env.observation_space, spaces.Dict) or "proprioception" not in env.observation_space.spaces:
             raise ValueError("TaxiWrapper expects an environment with 'proprioception' in observation space (e.g. NavigationWrapper).")
-            
+
         self.proprioception_dim = env.observation_space["proprioception"].shape[0]
-        
-        self.observation_space = spaces.Dict({
+
+        # Check if wrapped env has image (for include_image mode)
+        self.has_image = "image" in env.observation_space.spaces
+
+        obs_spaces = {
             "goal": spaces.Box(0, 1, shape=(3,), dtype=np.float32),
             "proprioception": spaces.Box(-np.inf, np.inf, shape=(self.proprioception_dim,), dtype=np.float32)
-        })
-        
+        }
+
+        # Include image in observation space if requested and available
+        if self.include_image and self.has_image:
+            obs_spaces["image"] = env.observation_space["image"]
+
+        self.observation_space = spaces.Dict(obs_spaces)
+
         self.current_goal_idx = 0
         self.steps_since_switch = 0
         
@@ -74,10 +86,17 @@ class TaxiWrapper(gym.Wrapper):
     def _get_obs(self, obs):
         goal = np.zeros(3, dtype=np.float32)
         goal[self.current_goal_idx] = 1.0
-        return {
+
+        result = {
             "goal": goal,
             "proprioception": obs["proprioception"]
         }
+
+        # Include image if requested and available
+        if self.include_image and self.has_image and "image" in obs:
+            result["image"] = obs["image"]
+
+        return result
         
     def _calculate_reward(self, info):
         forward_vel = info.get("velocimeter", [0.0])[0]
@@ -88,7 +107,7 @@ class TaxiWrapper(gym.Wrapper):
         if self.current_goal_idx == 0: # Forward
             # Linear reward for forward velocity, penalize angular velocity
             reward = forward_vel  - self.penalty_scale * abs(angular_vel)
-            reward *= 2.0
+            reward *= 5.0
 
         elif self.current_goal_idx == 1: # CW (Right)
             # Linear reward for angular velocity, penalize forward velocity
