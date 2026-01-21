@@ -178,6 +178,12 @@ class MMJCENV(gym.Env):
         observation["sensors"] = np.concatenate(sensors)
         new_info["coverage"] = self._calculate_coverage()
         new_info["maze_map"] = self._get_maze_map()
+
+        # Add all target positions and colors to info
+        new_info["targets_pos"] = self._get_all_target_positions()
+        new_info["targets_colors"] = self._get_all_target_colors()
+        new_info["n_targets"] = len(self.mm_env._task._targets)
+
         return observation, new_info
 
     def reset(self, seed=None, options=None):
@@ -415,6 +421,42 @@ class MMJCENV(gym.Env):
                 - 'G' = target/goal position
         """
         return self.mm_env._task._maze_arena._maze.entity_layer.copy()
+
+    def _get_all_target_positions(self):
+        """Get positions of all targets in grid coordinates.
+
+        Returns:
+            np.ndarray: Array of shape (n_targets, 2) containing (x, y) positions
+                        in grid coordinates for each target.
+        """
+        from dm_control import mjcf
+        task = self.mm_env._task
+        arena = task._maze_arena
+
+        positions = []
+        for target in task._targets:
+            frame = mjcf.get_attachment_frame(target.mjcf_model)
+            if frame is not None and frame.pos is not None:
+                pos = frame.pos
+                # Convert world position to grid coordinates
+                grid_x = pos[0] / arena._xy_scale + arena._x_offset
+                grid_y = -pos[1] / arena._xy_scale + arena._y_offset
+                positions.append([grid_x, grid_y])
+            else:
+                # Fallback position if frame not found
+                positions.append([0.0, 0.0])
+
+        return np.array(positions, dtype=np.float32)
+
+    def _get_all_target_colors(self):
+        """Get colors of all targets.
+
+        Returns:
+            np.ndarray: Array of shape (n_targets, 3) containing RGB colors
+                        for each target (values in range 0-1).
+        """
+        task = self.mm_env._task
+        return np.array(task._target_colors[:len(task._targets)], dtype=np.float32)
 
     def _get_wall_colors(self):
         """Get the current wall colors from the arena's texture mapping.

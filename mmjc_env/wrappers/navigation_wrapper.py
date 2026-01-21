@@ -386,6 +386,10 @@ class NavigationWrapper(gym.Wrapper):
         # Add goal position to info
         info["goal_pos"] = self.goal_pos
 
+        # Pass through target information (for GPS module)
+        # These are already set by the base MMJCENV, we just ensure they're available
+        # targets_pos, targets_colors, n_targets are set by base env
+
         # Reset reward tracking
         self._total_reward = 0.0
         self._last_reward = 0.0
