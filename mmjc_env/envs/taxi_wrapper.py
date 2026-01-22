@@ -55,7 +55,8 @@ class TaxiWrapper(gym.Wrapper):
 
         # Include image in observation space if requested and available
         if self.include_image and self.has_image:
-            obs_spaces["image"] = env.observation_space["image"]
+            self.image_shape = env.observation_space["image"].shape  # e.g. (64, 64, 3)
+            obs_spaces["image"] = spaces.Box(0, 255, shape=self.image_shape, dtype=np.uint8)
 
         self.observation_space = spaces.Dict(obs_spaces)
 
