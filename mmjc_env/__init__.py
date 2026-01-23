@@ -72,6 +72,20 @@ register(
     },
 )
 
+
+register(
+    id="mmjc-9",
+    entry_point="mmjc_env.envs:MMJCENV",
+    kwargs={
+        "maze_size": 9,
+        "num_targets": 3,
+        "time_limit": 250,
+        "exploration_reward": False,
+        "optional_reward": False,
+        "target_reward": True,
+    },
+)
+
 register(
     id="mmjc-low-navigation",
     entry_point="mmjc_env.envs:MMJCENV",
