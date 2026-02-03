@@ -116,8 +116,14 @@ register(
     },
 )
 
-# Taxi Navigation Environment - Ant on flat ground with goal switching
+# Taxi Navigation Environment - Ant on flat ground with goal switching (3 goals)
 register(
     id="TaxiNavigation-v0",
     entry_point="mmjc_env.envs:TaxiNavigationEnv",
+)
+
+# Taxi Navigation Environment with 4 goals (FORWARD, ROTATE_CW, ROTATE_CCW, BACKWARD)
+register(
+    id="TaxiNavigation-v1",
+    entry_point="mmjc_env.envs:TaxiNavigation4GoalEnv",
 )
