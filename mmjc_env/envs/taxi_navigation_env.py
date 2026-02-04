@@ -537,9 +537,10 @@ class TaxiNavigationTask4Goal(composer.Task):
         elif self.current_goal == GoalType4.BACKWARD:
             return -forward_scale * forward_vel - self.penalty_scale * abs(angular_vel)
         elif self.current_goal == GoalType4.ROTATE_CW:
-            return -angular_vel - self.penalty_scale * forward_scale * abs(forward_vel)
+            # Pure rotation reward - no forward penalty to make rotation easier to learn
+            return -angular_vel
         else:  # ROTATE_CCW
-            return angular_vel - self.penalty_scale * forward_scale * abs(forward_vel)
+            return angular_vel
 
     def get_discount(self, physics):
         return 1.0
