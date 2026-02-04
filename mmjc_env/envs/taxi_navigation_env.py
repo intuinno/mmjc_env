@@ -530,17 +530,17 @@ class TaxiNavigationTask4Goal(composer.Task):
         angular_vel = self.get_angular_velocity(physics)
 
         # Scale forward velocity to match angular velocity range (~4x difference)
-        forward_scale = 4.0
+        forward_scale = 2.0
+        self.penalty_scale = 0.6
 
         if self.current_goal == GoalType4.FORWARD:
             return forward_scale * forward_vel - self.penalty_scale * abs(angular_vel)
         elif self.current_goal == GoalType4.BACKWARD:
             return -forward_scale * forward_vel - self.penalty_scale * abs(angular_vel)
         elif self.current_goal == GoalType4.ROTATE_CW:
-            # Pure rotation reward - no forward penalty to make rotation easier to learn
-            return -angular_vel
+            return -angular_vel - self.penalty_scale  * abs(forward_vel)
         else:  # ROTATE_CCW
-            return angular_vel
+            return angular_vel - self.penalty_scale  * abs(forward_vel)
 
     def get_discount(self, physics):
         return 1.0
