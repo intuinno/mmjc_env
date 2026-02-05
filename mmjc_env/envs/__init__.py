@@ -4,6 +4,7 @@ from mmjc_env.envs.taxi_navigation_env import (
     TaxiNavigationEnv,
     TaxiNavigation4GoalEnv,
     TaxiNavigation4GoalDistanceEnv,
+    TaxiNavigation4GoalVectorEnv,
     GoalType,
     GoalType4,
 )

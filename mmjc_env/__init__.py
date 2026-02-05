@@ -133,3 +133,9 @@ register(
     id="TaxiNavigation-v2",
     entry_point="mmjc_env.envs:TaxiNavigation4GoalDistanceEnv",
 )
+
+# Taxi Navigation with 4 goals, 2D goal vector encoding, velocity-based reward
+register(
+    id="TaxiNavigation-v3",
+    entry_point="mmjc_env.envs:TaxiNavigation4GoalVectorEnv",
+)
