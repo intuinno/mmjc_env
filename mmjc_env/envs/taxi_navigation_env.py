@@ -787,7 +787,7 @@ class TaxiNavigationTask4GoalDistance(composer.Task):
         self,
         walker,
         arena,
-        goal_switch_interval: int = 100,
+        goal_switch_interval: int = 120,
         reward_window: int = 40,
         physics_timestep: float = 0.005,
         control_timestep: float = 0.025,
@@ -800,7 +800,9 @@ class TaxiNavigationTask4GoalDistance(composer.Task):
         self.reward_window = reward_window
 
         self.current_goal = GoalType4.FORWARD
+        self.previous_goal = GoalType4.FORWARD
         self._step_count = 0
+        self._goal_switched = False
 
         # Window tracking
         self._window_step = 0
@@ -832,10 +834,14 @@ class TaxiNavigationTask4GoalDistance(composer.Task):
         self._walker.reinitialize_pose(physics, random_state)
         self._step_count = 0
         self._switch_goal(random_state)
+        self.previous_goal = self.current_goal
+        self._goal_switched = False
         self._reset_window(physics)
 
     def _switch_goal(self, random_state):
+        self.previous_goal = self.current_goal
         self.current_goal = GoalType4(random_state.randint(0, 4))
+        self._goal_switched = True
 
     def _get_position(self, physics):
         """Get 2D position of the walker root body."""
@@ -859,9 +865,9 @@ class TaxiNavigationTask4GoalDistance(composer.Task):
     def after_step(self, physics, random_state):
         self._step_count += 1
         self._window_step += 1
+        self._goal_switched = False
         if self._step_count % self.goal_switch_interval == 0:
             self._switch_goal(random_state)
-            self._reset_window(physics)
 
     def get_forward_velocity(self, physics):
         velocimeter = physics.bind(
@@ -876,8 +882,14 @@ class TaxiNavigationTask4GoalDistance(composer.Task):
         return float(gyro[2])
 
     def get_reward(self, physics):
-        if self._window_step < self.reward_window:
+        # Determine if we should give a reward now
+        # Give reward if window is full OR if goal just switched (partial window)
+        if self._window_step < self.reward_window and not self._goal_switched:
             return 0.0
+
+        # Use the goal that was active during the window
+        # If goal just switched, use previous_goal for this final window reward
+        active_goal = self.previous_goal if self._goal_switched else self.current_goal
 
         # Compute displacement and heading change over the window
         current_pos = self._get_position(physics)
@@ -894,12 +906,12 @@ class TaxiNavigationTask4GoalDistance(composer.Task):
         dh = current_heading - self._window_start_heading
         dh = (dh + np.pi) % (2 * np.pi) - np.pi  # wrap to [-pi, pi]
 
-        # Compute reward based on goal
-        if self.current_goal == GoalType4.FORWARD:
+        # Compute reward based on active goal
+        if active_goal == GoalType4.FORWARD:
             reward = forward_disp
-        elif self.current_goal == GoalType4.BACKWARD:
+        elif active_goal == GoalType4.BACKWARD:
             reward = -forward_disp
-        elif self.current_goal == GoalType4.ROTATE_CW:
+        elif active_goal == GoalType4.ROTATE_CW:
             reward = -dh  # CW = negative yaw change
         else:  # ROTATE_CCW
             reward = dh   # CCW = positive yaw change
@@ -936,7 +948,7 @@ class TaxiNavigation4GoalDistanceEnv(gymnasium.Env):
 
     def __init__(
         self,
-        goal_switch_interval: int = 100,
+        goal_switch_interval: int = 120,
         reward_window: int = 40,
         time_limit: float = 30.0,
         render_mode: str = None,
@@ -1172,7 +1184,7 @@ class TaxiNavigation4GoalVectorEnv(gymnasium.Env):
 
     def __init__(
         self,
-        goal_switch_interval: int = 100,
+        goal_switch_interval: int = 120,
         reward_window: int = 40,
         time_limit: float = 30.0,
         render_mode: str = None,
