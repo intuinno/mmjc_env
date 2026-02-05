@@ -127,3 +127,9 @@ register(
     id="TaxiNavigation-v1",
     entry_point="mmjc_env.envs:TaxiNavigation4GoalEnv",
 )
+
+# Taxi Navigation with 4 goals and windowed distance/angle reward (40-step window)
+register(
+    id="TaxiNavigation-v2",
+    entry_point="mmjc_env.envs:TaxiNavigation4GoalDistanceEnv",
+)
