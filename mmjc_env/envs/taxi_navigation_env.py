@@ -1146,8 +1146,8 @@ class TaxiNavigation4GoalDistanceEnv(gymnasium.Env):
 class TaxiNavigation4GoalVectorEnv(gymnasium.Env):
     """Gymnasium environment for taxi navigation with 4 goals and 2D goal vector.
 
-    Uses velocity-based reward (same as v1/TaxiNavigation4GoalEnv) but encodes
-    goals as a 2D vector instead of 4D one-hot:
+    Uses windowed distance/angle reward (same as v2/TaxiNavigation4GoalDistanceEnv)
+    but encodes goals as a 2D vector instead of 4D one-hot:
         FORWARD  -> [+1,  0]
         BACKWARD -> [-1,  0]
         ROTATE_CW  -> [ 0, -1]
@@ -1173,10 +1173,7 @@ class TaxiNavigation4GoalVectorEnv(gymnasium.Env):
     def __init__(
         self,
         goal_switch_interval: int = 100,
-        target_forward_velocity: float = 1.0,
-        target_angular_velocity: float = 0.5,
-        velocity_tolerance: float = 0.3,
-        penalty_scale: float = 0.3,
+        reward_window: int = 40,
         time_limit: float = 30.0,
         render_mode: str = None,
     ):
@@ -1187,14 +1184,11 @@ class TaxiNavigation4GoalVectorEnv(gymnasium.Env):
 
         self._walker = ant.Ant(marker_rgba=(255, 0, 0, 1.0))
         self._arena = floors.Floor(size=(20, 20))
-        self._task = TaxiNavigationTask4Goal(
+        self._task = TaxiNavigationTask4GoalDistance(
             walker=self._walker,
             arena=self._arena,
             goal_switch_interval=goal_switch_interval,
-            target_forward_velocity=target_forward_velocity,
-            target_angular_velocity=target_angular_velocity,
-            velocity_tolerance=velocity_tolerance,
-            penalty_scale=penalty_scale,
+            reward_window=reward_window,
         )
 
         self._env = composer.Environment(
